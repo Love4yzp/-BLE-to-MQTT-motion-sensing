@@ -1,0 +1,57 @@
+{
+  "app": {
+    "title": "SeeedUA Smart Retail Management",
+    "brand": "SeeedUA Smart Retail Management"
+  },
+  "nav": {
+    "mqtt": "MQTT",
+    "connected": "Connected",
+    "disconnected": "Disconnected"
+  },
+  "product": {
+    "title": "Product Mapping",
+    "add": "+ Add Product",
+    "mac": "MAC Address",
+    "sku": "SKU",
+    "name": "Product Name",
+    "video": "Video",
+    "screen": "Screen",
+    "actions": "Actions",
+    "edit": "Edit",
+    "delete": "Delete",
+    "empty": "No product mappings",
+    "addTitle": "Add Product",
+    "editTitle": "Edit Product",
+    "macPlaceholder": "c1f93e1d937c",
+    "macHint": "Copy from event log",
+    "skuPlaceholder": "UA-HOVR-001",
+    "namePlaceholder": "UA HOVR Running Shoes",
+    "videoPlaceholder": "hovr_promo.mp4",
+    "screenPlaceholder": "screen-01",
+    "videoFile": "Video File",
+    "targetScreen": "Target Screen",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saveFailed": "Save failed",
+    "confirmDelete": "Are you sure to delete this product?"
+  },
+  "gateway": {
+    "title": "Gateway Management",
+    "blink": "Blink",
+    "labelPlaceholder": "Enter location label, e.g.: Shelf A",
+    "lastSeen": "Last seen",
+    "empty": "No gateways",
+    "emptyHint": "Gateways will appear when online"
+  },
+  "sku": {
+    "title": "SKU Status",
+    "realtime": "Real-time update",
+    "pickedUp": "Picked Up",
+    "putDown": "Put Down",
+    "empty": "No sensor data"
+  },
+  "lang": {
+    "zh": "中文",
+    "en": "English"
+  }
+}

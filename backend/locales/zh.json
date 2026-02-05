@@ -1,0 +1,57 @@
+{
+  "app": {
+    "title": "SeeedUA 智慧零售管理",
+    "brand": "SeeedUA 智慧零售管理"
+  },
+  "nav": {
+    "mqtt": "MQTT",
+    "connected": "已连接",
+    "disconnected": "未连接"
+  },
+  "product": {
+    "title": "产品映射表",
+    "add": "+ 添加产品",
+    "mac": "MAC 地址",
+    "sku": "SKU",
+    "name": "产品名称",
+    "video": "视频",
+    "screen": "屏幕",
+    "actions": "操作",
+    "edit": "编辑",
+    "delete": "删除",
+    "empty": "暂无产品映射",
+    "addTitle": "添加产品",
+    "editTitle": "编辑产品",
+    "macPlaceholder": "c1f93e1d937c",
+    "macHint": "从事件日志中复制",
+    "skuPlaceholder": "UA-HOVR-001",
+    "namePlaceholder": "UA HOVR 跑鞋",
+    "videoPlaceholder": "hovr_promo.mp4",
+    "screenPlaceholder": "screen-01",
+    "videoFile": "视频文件",
+    "targetScreen": "目标屏幕",
+    "cancel": "取消",
+    "save": "保存",
+    "saveFailed": "保存失败",
+    "confirmDelete": "确定删除此产品?"
+  },
+  "gateway": {
+    "title": "网关管理",
+    "blink": "闪烁",
+    "labelPlaceholder": "输入位置标签，如：货架A",
+    "lastSeen": "最后在线",
+    "empty": "暂无网关",
+    "emptyHint": "网关上线后自动显示"
+  },
+  "sku": {
+    "title": "SKU 状态",
+    "realtime": "实时更新",
+    "pickedUp": "提起",
+    "putDown": "放下",
+    "empty": "暂无传感器数据"
+  },
+  "lang": {
+    "zh": "中文",
+    "en": "English"
+  }
+}

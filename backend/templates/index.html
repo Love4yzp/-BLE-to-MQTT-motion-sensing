@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeeedUA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <style>
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .status-online { background: #22c55e; }
+        .status-offline { background: #ef4444; }
+        .event-play { background: #dcfce7; }
+        .event-picked_up { background: #3b82f6; color: white; }
+        .event-put_down { background: #9ca3af; color: white; }
+        .event-gateway { background: #e0e7ff; }
+        .event-unknown { background: #fef3c7; }
+        [v-cloak] { display: none; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+<div id="app" v-cloak>
+    <nav class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl font-bold text-gray-800">${ i18n.app?.brand }</h1>
+                <div class="flex items-center gap-4">
+                    <select v-model="lang" @change="changeLang" class="text-sm border rounded px-2 py-1">
+                        <option value="zh">${ i18n.lang?.zh }</option>
+                        <option value="en">${ i18n.lang?.en }</option>
+                    </select>
+                    <span class="text-sm text-gray-500">${ i18n.nav?.mqtt }: ${mqttStatus.broker}</span>
+                    <span class="status-dot" :class="mqttStatus.connected ? 'status-online' : 'status-offline'"></span>
+                    <span class="text-sm" :class="mqttStatus.connected ? 'text-green-600' : 'text-red-600'">
+                        ${ mqttStatus.connected ? i18n.nav?.connected : i18n.nav?.disconnected }
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <div class="lg:col-span-2 bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold">${ i18n.product?.title }</h2>
+                    <button @click="showAddProduct" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        ${ i18n.product?.add }
+                    </button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left">${ i18n.product?.mac }</th>
+                                <th class="px-4 py-2 text-left">${ i18n.product?.sku }</th>
+                                <th class="px-4 py-2 text-left">${ i18n.product?.name }</th>
+                                <th class="px-4 py-2 text-left">${ i18n.product?.video }</th>
+                                <th class="px-4 py-2 text-left">${ i18n.product?.screen }</th>
+                                <th class="px-4 py-2 text-left">${ i18n.product?.actions }</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="p in products" :key="p.mac" class="border-t hover:bg-gray-50">
+                                <td class="px-4 py-2 font-mono text-xs">${ p.mac }</td>
+                                <td class="px-4 py-2">${ p.sku }</td>
+                                <td class="px-4 py-2">${ p.name }</td>
+                                <td class="px-4 py-2 text-xs">${ p.video }</td>
+                                <td class="px-4 py-2">${ p.screen }</td>
+                                <td class="px-4 py-2">
+                                    <button @click="editProduct(p)" class="text-blue-500 hover:underline">${ i18n.product?.edit }</button>
+                                    <button @click="deleteProduct(p.mac)" class="text-red-500 hover:underline ml-2">${ i18n.product?.delete }</button>
+                                </td>
+                            </tr>
+                            <tr v-if="products.length === 0">
+                                <td colspan="6" class="px-4 py-8 text-center text-gray-400">${ i18n.product?.empty }</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">${ i18n.gateway?.title }</h2>
+                <div class="space-y-3">
+                    <div v-for="gw in gateways" :key="gw.gateway_id" class="border rounded p-3 hover:bg-gray-50">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="font-mono text-sm font-medium">${ gw.gateway_id }</div>
+                                <div class="text-xs text-gray-500 mt-1">
+                                    ${ gw.board }<br>
+                                    IP: ${ gw.ip }<br>
+                                    MAC: ${ gw.mac }
+                                </div>
+                            </div>
+                            <button @click="identifyGateway(gw.gateway_id)" 
+                                    class="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200">
+                                ${ i18n.gateway?.blink }
+                            </button>
+                        </div>
+                        <div class="mt-2">
+                            <input type="text" 
+                                   v-model="gw.label" 
+                                   @change="updateGatewayLabel(gw.gateway_id, gw.label)"
+                                   :placeholder="i18n.gateway?.labelPlaceholder"
+                                   class="w-full text-sm border rounded px-2 py-1">
+                        </div>
+                        <div class="text-xs text-gray-400 mt-1">${ i18n.gateway?.lastSeen }: ${ gw.last_seen }</div>
+                    </div>
+                    <div v-if="gateways.length === 0" class="text-center text-gray-400 py-8">
+                        ${ i18n.gateway?.empty }<br><span class="text-xs">${ i18n.gateway?.emptyHint }</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-3 bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold">${ i18n.sku?.title }</h2>
+                    <span class="text-xs text-gray-400">${ i18n.sku?.realtime }</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    <div v-for="s in skuStates" :key="s.mac" 
+                         class="rounded-xl p-4 min-h-[90px] flex flex-col justify-center items-center text-center transition-all"
+                         :class="s.active ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-600'">
+                        <div class="font-bold text-lg">${ s.sku || s.mac }</div>
+                        <div class="text-xs mt-1 opacity-75">${ s.name }</div>
+                        <div class="text-xs mt-2 font-medium">${ s.active ? i18n.sku?.pickedUp : i18n.sku?.putDown }</div>
+                    </div>
+                    <div v-if="skuStates.length === 0" class="col-span-full text-center text-gray-400 py-8">${ i18n.sku?.empty }</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div v-if="modal.show" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 class="text-lg font-semibold mb-4">${ modal.editing ? i18n.product?.editTitle : i18n.product?.addTitle }</h3>
+            <form @submit.prevent="saveProduct">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">${ i18n.product?.mac }</label>
+                        <input type="text" v-model="modal.form.mac" required :placeholder="i18n.product?.macPlaceholder"
+                               :disabled="modal.editing"
+                               class="w-full border rounded px-3 py-2 font-mono text-sm disabled:bg-gray-100">
+                        <div class="text-xs text-gray-400 mt-1">${ i18n.product?.macHint }</div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">${ i18n.product?.sku }</label>
+                        <input type="text" v-model="modal.form.sku" required :placeholder="i18n.product?.skuPlaceholder"
+                               class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">${ i18n.product?.name }</label>
+                        <input type="text" v-model="modal.form.name" required :placeholder="i18n.product?.namePlaceholder"
+                               class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">${ i18n.product?.videoFile }</label>
+                        <input type="text" v-model="modal.form.video" required :placeholder="i18n.product?.videoPlaceholder"
+                               class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">${ i18n.product?.targetScreen }</label>
+                        <input type="text" v-model="modal.form.screen" required :placeholder="i18n.product?.screenPlaceholder"
+                               class="w-full border rounded px-3 py-2">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" @click="modal.show = false" class="px-4 py-2 border rounded hover:bg-gray-50">${ i18n.product?.cancel }</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">${ i18n.product?.save }</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+const { createApp } = Vue
+
+createApp({
+    delimiters: ['${', '}'],
+    data() {
+        return {
+            lang: localStorage.getItem('lang') || 'zh',
+            i18n: {},
+            mqttStatus: { broker: '{{ mqtt_broker }}:{{ mqtt_port }}', connected: {{ 'true' if mqtt_connected else 'false' }} },
+            products: [],
+            gateways: [],
+            skuStates: [],
+            modal: {
+                show: false,
+                editing: false,
+                form: { mac: '', sku: '', name: '', video: '', screen: '' }
+            }
+        }
+    },
+    async mounted() {
+        await this.loadI18n()
+        this.fetchAll()
+        setInterval(() => this.fetchSkuStates(), 500)
+        setInterval(() => this.fetchGateways(), 5000)
+        setInterval(() => this.fetchMqttStatus(), 5000)
+    },
+    methods: {
+        async loadI18n() {
+            const r = await fetch(`/api/i18n/${this.lang}`)
+            this.i18n = await r.json()
+            document.title = this.i18n.app?.title || 'SeeedUA'
+        },
+        async changeLang() {
+            localStorage.setItem('lang', this.lang)
+            await this.loadI18n()
+        },
+        async fetchAll() {
+            await Promise.all([this.fetchProducts(), this.fetchGateways(), this.fetchSkuStates(), this.fetchMqttStatus()])
+        },
+        async fetchProducts() {
+            const r = await fetch('/api/products')
+            this.products = await r.json()
+        },
+        async fetchGateways() {
+            const r = await fetch('/api/gateways')
+            this.gateways = await r.json()
+        },
+        async fetchSkuStates() {
+            const r = await fetch('/api/sku-states')
+            this.skuStates = await r.json()
+        },
+        async fetchMqttStatus() {
+            const r = await fetch('/api/mqtt/status')
+            const data = await r.json()
+            this.mqttStatus.connected = data.connected
+        },
+        showAddProduct() {
+            this.modal = { show: true, editing: false, form: { mac: '', sku: '', name: '', video: '', screen: '' } }
+        },
+        editProduct(p) {
+            this.modal = { show: true, editing: true, form: { ...p } }
+        },
+        async saveProduct() {
+            const url = this.modal.editing ? `/api/products/${this.modal.form.mac}` : '/api/products'
+            const method = this.modal.editing ? 'PUT' : 'POST'
+            const r = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.modal.form)
+            })
+            if (r.ok) {
+                this.modal.show = false
+                this.fetchProducts()
+            } else {
+                alert(this.i18n.product?.saveFailed)
+            }
+        },
+        async deleteProduct(mac) {
+            if (!confirm(this.i18n.product?.confirmDelete)) return
+            const r = await fetch(`/api/products/${mac}`, { method: 'DELETE' })
+            if (r.ok) this.fetchProducts()
+        },
+        async identifyGateway(id) {
+            const r = await fetch(`/api/gateways/${id}/identify`, { method: 'POST' })
+            const data = await r.json()
+            alert(data.message || data.status)
+        },
+        async updateGatewayLabel(id, label) {
+            await fetch(`/api/gateways/${id}/label`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ label })
+            })
+        }
+    }
+}).mount('#app')
+</script>
+</body>
+</html>

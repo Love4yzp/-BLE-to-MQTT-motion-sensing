@@ -7,7 +7,7 @@ BTHome 协议运动检测传感器，用于智慧零售场景。
 编辑 `config.h`：
 
 ```c
-#define SENSITIVITY_PRESET  2    // 1=高灵敏, 2=标准, 3=低灵敏
+#define SENSITIVITY_PRESET  2    // 0=高级, 1=高灵敏, 2=标准, 3=低灵敏
 #define DEBUG_ENABLED  0         // 0=生产, 1=调试
 ```
 
@@ -16,6 +16,27 @@ BTHome 协议运动检测传感器，用于智慧零售场景。
 | 1 高灵敏 | 轻触即触发 | 小件/轻便商品 | ~6 个月 |
 | 2 标准 | 正常拿起 | 大多数商品 | ~10 个月 |
 | 3 低灵敏 | 需用力拿起 | 震动环境/重型商品 | ~12+ 个月 |
+| 0 高级 | 自定义 | 需要微调的场景 | 取决于配置 |
+
+### 高级模式 (SENSITIVITY_PRESET = 0)
+
+当预设 1-3 无法满足需求时，设置 `SENSITIVITY_PRESET = 0` 并调整以下参数：
+
+```c
+#define SENSITIVITY_PRESET   0       // 启用高级模式
+
+#define CUSTOM_THRESHOLD     0x0A    // 运动阈值 (0x02~0x3F)
+#define CUSTOM_TAIL_WINDOW   3000    // 尾随窗口 (ms)
+#define CUSTOM_TX_POWER      4       // 发射功率 (dBm)
+```
+
+**参数说明：**
+
+| 参数 | 范围 | 说明 |
+|------|------|------|
+| CUSTOM_THRESHOLD | 0x02~0x3F | 越小越灵敏，公式: 阈值 = 值 × 31.25mg |
+| CUSTOM_TAIL_WINDOW | 1000~10000 | 广播后等待时间(ms)，越长越耗电 |
+| CUSTOM_TX_POWER | -40 ~ +4 | 发射功率(dBm)，越高覆盖越远但更耗电 |
 
 ---
 

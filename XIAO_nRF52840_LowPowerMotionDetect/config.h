@@ -5,14 +5,6 @@
  * 
  * >>> FOR DEPLOYMENT PERSONNEL - 供部署人员调整 <<<
  * 
- * Only TWO settings to configure:
- * 只需配置以下两项：
- * 
- * 1. SENSITIVITY_PRESET  - Motion detection sensitivity
- *                          运动检测灵敏度
- * 2. DEBUG_ENABLED       - Debug mode (for troubleshooting)
- *                          调试模式（用于排查问题）
- * 
  * After modification, recompile and flash the firmware.
  * 修改后需重新编译并烧录固件。
  * 
@@ -26,48 +18,75 @@
 // 1. SENSITIVITY PRESET | 灵敏度预设
 // =============================================================================
 //
-// Choose a preset (1, 2, or 3):
-// 选择预设模式（1、2 或 3）：
+// Choose a preset (0, 1, 2, or 3):
+// 选择预设模式（0、1、2 或 3）：
+//
+//   0 = ADVANCED | 高级模式
+//       - Use custom values below
+//       - 使用下方自定义参数
 //
 //   1 = HIGH SENSITIVITY | 高灵敏
 //       - Triggers on light touch/pickup
 //       - 轻触或轻拿即触发
-//       - Best for: small/light products
-//       - 适用于：小件/轻便商品
 //       - Battery: ~6 months (200 triggers/day)
 //       - 续航：约6个月（每天触发200次）
 //
 //   2 = STANDARD | 标准 [DEFAULT]
 //       - Triggers on normal pickup
 //       - 正常拿起时触发
-//       - Best for: most retail products
-//       - 适用于：大多数零售商品
 //       - Battery: ~10 months (200 triggers/day)
 //       - 续航：约10个月（每天触发200次）
 //
 //   3 = LOW SENSITIVITY | 低灵敏
 //       - Requires firm pickup to trigger
 //       - 需要明显拿起动作才触发
-//       - Best for: vibrating environments, heavy products
-//       - 适用于：有震动的环境、重型商品
 //       - Battery: ~12+ months (200 triggers/day)
 //       - 续航：约12个月以上（每天触发200次）
 //
 #define SENSITIVITY_PRESET  2
 
 // =============================================================================
-// 2. DEBUG MODE | 调试模式
+// 2. ADVANCED MODE SETTINGS | 高级模式设置
+// =============================================================================
+//
+// >>> Only used when SENSITIVITY_PRESET = 0 <<<
+// >>> 仅当 SENSITIVITY_PRESET = 0 时生效 <<<
+//
+// --- Motion Threshold | 运动阈值 ---
+// Range: 0x02 ~ 0x3F (higher = less sensitive)
+// 范围: 0x02 ~ 0x3F (越大越不灵敏)
+// Formula: threshold = value * 31.25 mg
+// 公式: 阈值 = 数值 * 31.25 毫g
+//   0x02 =  ~62mg  (ultra sensitive | 超灵敏)
+//   0x05 = ~156mg  (high | 高)
+//   0x0A = ~312mg  (standard | 标准)
+//   0x14 = ~625mg  (low | 低)
+//   0x20 = ~1000mg (very low | 非常低)
+//
+#define CUSTOM_THRESHOLD     0x0A
+
+// --- Tail Window | 尾随窗口 ---
+// Range: 1000 ~ 10000 ms
+// 范围: 1000 ~ 10000 毫秒
+// Longer = better for continuous motion, but uses more power
+// 越长 = 连续动作体验更好，但更耗电
+//
+#define CUSTOM_TAIL_WINDOW   3000
+
+// --- TX Power | 发射功率 ---
+// Valid: -40, -20, -16, -12, -8, -4, 0, 4 (dBm)
+// 有效值: -40, -20, -16, -12, -8, -4, 0, 4 (dBm)
+// Higher = longer range, more power consumption
+// 越高 = 覆盖越远，但更耗电
+//
+#define CUSTOM_TX_POWER      4
+
+// =============================================================================
+// 3. DEBUG MODE | 调试模式
 // =============================================================================
 //
 //   0 = PRODUCTION | 生产模式 [DEFAULT]
-//       - No serial output, fastest response
-//       - 无串口输出，响应最快
-//
-//   1 = DEBUG | 调试模式
-//       - Serial output enabled (115200 baud)
-//       - 启用串口输出（波特率 115200）
-//       - Use for troubleshooting only
-//       - 仅用于排查问题
+//   1 = DEBUG | 调试模式 (Serial 115200)
 //
 #define DEBUG_ENABLED  0
 
@@ -75,14 +94,14 @@
 // ^^^ DEPLOYMENT SETTINGS END HERE ^^^
 // ^^^ 部署设置到此结束 ^^^
 // =============================================================================
-//
-// >>> DO NOT MODIFY BELOW THIS LINE <<<
-// >>> 请勿修改以下内容 <<<
-//
-// =============================================================================
 
-// Preset configurations (do not modify)
-#if SENSITIVITY_PRESET == 1
+// Preset configurations
+#if SENSITIVITY_PRESET == 0
+  // Advanced: use custom values
+  #define IMU_WAKEUP_THRESHOLD  CUSTOM_THRESHOLD
+  #define TAIL_WINDOW_MS        CUSTOM_TAIL_WINDOW
+  #define BLE_TX_POWER          CUSTOM_TX_POWER
+#elif SENSITIVITY_PRESET == 1
   // High sensitivity
   #define IMU_WAKEUP_THRESHOLD  0x05
   #define TAIL_WINDOW_MS        2000
@@ -99,7 +118,7 @@
   #define BLE_TX_POWER          4
 #endif
 
-// Fixed timing (optimized, do not change)
+// Fixed timing
 #define BROADCAST_DURATION_MS  300
 
 #endif // CONFIG_H

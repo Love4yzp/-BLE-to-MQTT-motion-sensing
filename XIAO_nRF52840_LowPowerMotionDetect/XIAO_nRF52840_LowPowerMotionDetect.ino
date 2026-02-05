@@ -721,7 +721,9 @@ void loop() {
         usbMode = isUsbPowered();
         usbModeChecked = true;
         if (usbMode) {
-            DEBUG_PRINTLN(">>> USB Power Mode: Sleep disabled");
+            Serial.println(F(">>> USB Power Mode: Sleep disabled, CLI active"));
+            Serial.print(F("INT1 pin state: "));
+            Serial.println(digitalRead(IMU_INT1_PIN) ? "HIGH" : "LOW");
         }
     }
     
@@ -729,6 +731,18 @@ void loop() {
     // USB 模式：处理 CLI 命令
     if (usbMode) {
         processCLI();
+        
+        // Periodic status (every 5 seconds)
+        static unsigned long lastStatusTime = 0;
+        if (millis() - lastStatusTime > 5000) {
+            lastStatusTime = millis();
+            Serial.print(F("[STATUS] INT1="));
+            Serial.print(digitalRead(IMU_INT1_PIN) ? "HIGH" : "LOW");
+            Serial.print(F(" cnt="));
+            Serial.print(interruptCount);
+            Serial.print(F(" tail="));
+            Serial.println(inTailWindow ? "Y" : "N");
+        }
     }
     
     // Always check motion first (critical for responsiveness)
@@ -742,6 +756,16 @@ void loop() {
         // 清除锁存中断（LIR=1 模式需要读取 WAKE_UP_SRC 才能重新触发 INT1）
         uint8_t wakeUpSrc;
         myIMU.readRegister(&wakeUpSrc, LSM6DS3_ACC_GYRO_WAKE_UP_SRC);
+        
+        // USB mode debug output
+        if (usbMode) {
+            Serial.print(F("[MOTION] cnt="));
+            Serial.print(interruptCount);
+            Serial.print(F(" src=0x"));
+            Serial.print(wakeUpSrc, HEX);
+            Serial.print(F(" tail="));
+            Serial.println(inTailWindow ? "Y" : "N");
+        }
         
         if (inTailWindow) {
             // Motion during tail window: restart advertising

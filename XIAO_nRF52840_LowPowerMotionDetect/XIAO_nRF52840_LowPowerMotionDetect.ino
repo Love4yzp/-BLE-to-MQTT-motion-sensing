@@ -97,7 +97,31 @@
 // Derived Constants (from config.h) | 派生常量（来自 config.h）
 // =============================================================================
 const unsigned long BROADCAST_DURATION = BROADCAST_DURATION_MS;
-const unsigned long TAIL_WINDOW_DURATION = TAIL_WINDOW_MS;
+
+// =============================================================================
+// Runtime Configuration (modifiable via CLI) | 运行时配置（可通过 CLI 修改）
+// =============================================================================
+
+// Config structure for flash storage
+// Flash 存储的配置结构
+struct RuntimeConfig {
+    uint32_t magic;           // Magic number to validate stored config
+    uint8_t threshold;        // IMU wake-up threshold (0x02-0x3F)
+    uint16_t tailWindow;      // Tail window duration (ms)
+    int8_t txPower;           // BLE TX power (dBm)
+};
+
+#define CONFIG_MAGIC 0x53454544  // "SEED" in hex
+#define CONFIG_ADDR  0x7F000     // Last 4KB page of internal flash
+
+// Runtime config (loaded from flash or defaults)
+// 运行时配置（从 flash 加载或使用默认值）
+RuntimeConfig rtConfig = {
+    CONFIG_MAGIC,
+    IMU_WAKEUP_THRESHOLD,     // Default from config.h
+    TAIL_WINDOW_MS,           // Default from config.h  
+    BLE_TX_POWER              // Default from config.h
+};
 
 // =============================================================================
 // Global Variables | 全局变量
@@ -123,6 +147,11 @@ char macStr[18] = {0};  // "AA:BB:CC:DD:EE:FF"
 // Timing variable for sleep countdown
 // 睡眠倒计时计时变量
 unsigned long lastAdvertiseTime = 0;
+
+// CLI input buffer
+// CLI 输入缓冲区
+char cmdBuffer[64] = {0};
+uint8_t cmdIndex = 0;
 
 // =============================================================================
 // Interrupt Service Routine | 中断服务程序
@@ -179,6 +208,170 @@ void ledsOff() {
  */
 bool isUsbPowered() {
     return (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk);
+}
+
+// =============================================================================
+// Flash Storage Functions | Flash 存储函数
+// =============================================================================
+
+void loadConfigFromFlash() {
+    RuntimeConfig stored;
+    uint32_t* src = (uint32_t*)CONFIG_ADDR;
+    uint32_t* dst = (uint32_t*)&stored;
+    
+    for (size_t i = 0; i < sizeof(RuntimeConfig)/4; i++) {
+        dst[i] = src[i];
+    }
+    
+    if (stored.magic == CONFIG_MAGIC) {
+        rtConfig = stored;
+        DEBUG_PRINTLN("Config loaded from flash");
+    } else {
+        DEBUG_PRINTLN("Using default config");
+    }
+}
+
+void saveConfigToFlash() {
+    // Erase page first
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+    NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Een;
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+    NRF_NVMC->ERASEPAGE = CONFIG_ADDR;
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+    
+    // Write config
+    NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen;
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+    
+    uint32_t* src = (uint32_t*)&rtConfig;
+    uint32_t* dst = (uint32_t*)CONFIG_ADDR;
+    
+    for (size_t i = 0; i < sizeof(RuntimeConfig)/4; i++) {
+        dst[i] = src[i];
+        while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+    }
+    
+    NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren;
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+}
+
+// =============================================================================
+// CLI Command Parser | CLI 命令解析器
+// =============================================================================
+
+void printHelp() {
+    Serial.println();
+    Serial.println(F("=== SeeedUA CLI Commands ==="));
+    Serial.println(F("AT+HELP              - Show this help"));
+    Serial.println(F("AT+INFO              - Show current config"));
+    Serial.println(F("AT+THRESHOLD=xx      - Set threshold (hex, 02-3F)"));
+    Serial.println(F("AT+TAILWINDOW=xxxx   - Set tail window (ms, 1000-10000)"));
+    Serial.println(F("AT+TXPOWER=x         - Set TX power (dBm, -40 to 4)"));
+    Serial.println(F("AT+SAVE              - Save config to flash"));
+    Serial.println(F("AT+DEFAULT           - Reset to defaults"));
+    Serial.println(F("AT+REBOOT            - Reboot device"));
+    Serial.println();
+}
+
+void printInfo() {
+    Serial.println();
+    Serial.println(F("=== Device Info ==="));
+    Serial.print(F("MAC: ")); Serial.println(macStr);
+    Serial.print(F("Name: ")); Serial.println(deviceName);
+    Serial.println();
+    Serial.println(F("=== Current Config ==="));
+    Serial.print(F("THRESHOLD=0x")); 
+    if (rtConfig.threshold < 0x10) Serial.print("0");
+    Serial.print(rtConfig.threshold, HEX);
+    Serial.print(F(" (~")); Serial.print(rtConfig.threshold * 31.25); Serial.println(F(" mg)"));
+    Serial.print(F("TAILWINDOW=")); Serial.print(rtConfig.tailWindow); Serial.println(F(" ms"));
+    Serial.print(F("TXPOWER=")); Serial.print(rtConfig.txPower); Serial.println(F(" dBm"));
+    Serial.println();
+}
+
+void processCommand(const char* cmd) {
+    // Convert to uppercase for comparison
+    char upperCmd[64];
+    strncpy(upperCmd, cmd, 63);
+    upperCmd[63] = '\0';
+    for (int i = 0; upperCmd[i]; i++) {
+        if (upperCmd[i] >= 'a' && upperCmd[i] <= 'z') {
+            upperCmd[i] -= 32;
+        }
+    }
+    
+    if (strncmp(upperCmd, "AT+HELP", 7) == 0) {
+        printHelp();
+    }
+    else if (strncmp(upperCmd, "AT+INFO", 7) == 0) {
+        printInfo();
+    }
+    else if (strncmp(upperCmd, "AT+THRESHOLD=", 13) == 0) {
+        uint8_t val = strtol(cmd + 13, NULL, 16);
+        if (val >= 0x02 && val <= 0x3F) {
+            rtConfig.threshold = val;
+            Serial.print(F("OK THRESHOLD=0x"));
+            Serial.println(val, HEX);
+        } else {
+            Serial.println(F("ERROR: Range 0x02-0x3F"));
+        }
+    }
+    else if (strncmp(upperCmd, "AT+TAILWINDOW=", 14) == 0) {
+        uint16_t val = atoi(cmd + 14);
+        if (val >= 1000 && val <= 10000) {
+            rtConfig.tailWindow = val;
+            Serial.print(F("OK TAILWINDOW="));
+            Serial.println(val);
+        } else {
+            Serial.println(F("ERROR: Range 1000-10000"));
+        }
+    }
+    else if (strncmp(upperCmd, "AT+TXPOWER=", 11) == 0) {
+        int8_t val = atoi(cmd + 11);
+        if (val >= -40 && val <= 4) {
+            rtConfig.txPower = val;
+            Serial.print(F("OK TXPOWER="));
+            Serial.println(val);
+        } else {
+            Serial.println(F("ERROR: Range -40 to 4"));
+        }
+    }
+    else if (strncmp(upperCmd, "AT+SAVE", 7) == 0) {
+        saveConfigToFlash();
+        Serial.println(F("OK Config saved to flash"));
+    }
+    else if (strncmp(upperCmd, "AT+DEFAULT", 10) == 0) {
+        rtConfig.threshold = IMU_WAKEUP_THRESHOLD;
+        rtConfig.tailWindow = TAIL_WINDOW_MS;
+        rtConfig.txPower = BLE_TX_POWER;
+        Serial.println(F("OK Defaults restored (use AT+SAVE to persist)"));
+    }
+    else if (strncmp(upperCmd, "AT+REBOOT", 9) == 0) {
+        Serial.println(F("OK Rebooting..."));
+        delay(100);
+        NVIC_SystemReset();
+    }
+    else if (strlen(cmd) > 0) {
+        Serial.print(F("ERROR: Unknown command: "));
+        Serial.println(cmd);
+        Serial.println(F("Type AT+HELP for available commands"));
+    }
+}
+
+void processCLI() {
+    while (Serial.available()) {
+        char c = Serial.read();
+        
+        if (c == '\r' || c == '\n') {
+            if (cmdIndex > 0) {
+                cmdBuffer[cmdIndex] = '\0';
+                processCommand(cmdBuffer);
+                cmdIndex = 0;
+            }
+        } else if (cmdIndex < sizeof(cmdBuffer) - 1) {
+            cmdBuffer[cmdIndex++] = c;
+        }
+    }
 }
 
 // =============================================================================
@@ -254,7 +447,7 @@ void setupWakeUpInterrupt() {
     // 4. 唤醒阈值 + 启用活动状态机
     //    位 6: SLEEP_ON_OFF=1 (启用状态机), 位 5:0=阈值
     //    使用部署配置区的 IMU_WAKEUP_THRESHOLD
-    myIMU.writeRegister(LSM6DS3_ACC_GYRO_WAKE_UP_THS, 0x40 | (IMU_WAKEUP_THRESHOLD & 0x3F));
+    myIMU.writeRegister(LSM6DS3_ACC_GYRO_WAKE_UP_THS, 0x40 | (rtConfig.threshold & 0x3F));
     
     // 5. Wake-up duration
     // 5. 唤醒持续时间
@@ -344,16 +537,33 @@ void goToSleep() {
 // =============================================================================
 
 void setup() {
+    // Check if USB powered first (need to know for Serial init)
+    // 先检测 USB 供电（用于决定是否初始化串口）
+    bool usbPowered = isUsbPowered();
+    
+    // Enable Serial if USB connected or debug mode
+    // USB 连接或调试模式时启用串口
 #if DEBUG_ENABLED
     Serial.begin(115200);
     delay(100);
+#else
+    if (usbPowered) {
+        Serial.begin(115200);
+        delay(100);
+    }
 #endif
 
-    DEBUG_PRINTLN("");
-    DEBUG_PRINTLN("========================================");
-    DEBUG_PRINTLN("  XIAO nRF52840 BTHome Motion Detect");
-    DEBUG_PRINTLN("========================================");
-    DEBUG_PRINTLN("");
+    // Load config from flash
+    // 从 flash 加载配置
+    loadConfigFromFlash();
+
+    if (usbPowered || DEBUG_ENABLED) {
+        Serial.println();
+        Serial.println(F("========================================"));
+        Serial.println(F("  XIAO nRF52840 BTHome Motion Detect"));
+        Serial.println(F("========================================"));
+        Serial.println();
+    }
 
     // =========================================================================
     // Check wake-up reason | 检查唤醒原因
@@ -443,7 +653,7 @@ void setup() {
     // Configure BLE advertising | 配置 BLE 广播
     // =========================================================================
     
-    Bluefruit.setTxPower(BLE_TX_POWER);
+    Bluefruit.setTxPower(rtConfig.txPower);
     Bluefruit.setName(deviceName);
     
     // Build initial BTHome Service Data (motion=1)
@@ -486,6 +696,13 @@ void setup() {
     }
 
     DEBUG_PRINTLN("Ready. Will sleep after broadcast.");
+    
+    // USB mode: show CLI help
+    // USB 模式：显示 CLI 帮助
+    if (usbPowered) {
+        Serial.println(F("CLI ready. Type AT+HELP for commands."));
+        Serial.println();
+    }
 }
 
 void loop() {
@@ -502,6 +719,12 @@ void loop() {
         if (usbMode) {
             DEBUG_PRINTLN(">>> USB Power Mode: Sleep disabled");
         }
+    }
+    
+    // USB mode: process CLI commands
+    // USB 模式：处理 CLI 命令
+    if (usbMode) {
+        processCLI();
     }
     
     // Always check motion first (critical for responsiveness)
@@ -543,7 +766,7 @@ void loop() {
     } else {
         // Tail window state: check if tail window elapsed
         // 尾随窗口状态：检查尾随窗口是否已过
-        if (millis() - tailWindowStart > TAIL_WINDOW_DURATION) {
+        if (millis() - tailWindowStart > rtConfig.tailWindow) {
             if (usbMode) {
                 // USB mode: don't sleep, just wait for next motion
                 // USB 模式：不睡眠，等待下一次运动

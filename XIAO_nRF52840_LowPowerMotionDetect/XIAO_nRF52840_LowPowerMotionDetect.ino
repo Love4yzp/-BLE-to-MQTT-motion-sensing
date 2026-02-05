@@ -739,6 +739,10 @@ void loop() {
             // 尾随窗口期间检测到运动：重新开始广播
             updateAdvertising(true);
             inTailWindow = false;
+        } else if (usbMode) {
+            // USB mode after tail window ended: start new broadcast cycle
+            // USB 模式尾随窗口结束后：开始新的广播周期
+            updateAdvertising(true);
         }
         // Extend/reset the broadcast timer
         // 延长/重置广播计时器

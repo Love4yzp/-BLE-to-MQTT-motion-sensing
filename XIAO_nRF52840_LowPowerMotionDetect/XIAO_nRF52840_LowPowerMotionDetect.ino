@@ -738,6 +738,11 @@ void loop() {
         motionDetected = false;
         interrupts();
         
+        // Clear latched interrupt (LIR=1 requires reading WAKE_UP_SRC to re-arm INT1)
+        // 清除锁存中断（LIR=1 模式需要读取 WAKE_UP_SRC 才能重新触发 INT1）
+        uint8_t wakeUpSrc;
+        myIMU.readRegister(&wakeUpSrc, LSM6DS3_ACC_GYRO_WAKE_UP_SRC);
+        
         if (inTailWindow) {
             // Motion during tail window: restart advertising
             // 尾随窗口期间检测到运动：重新开始广播

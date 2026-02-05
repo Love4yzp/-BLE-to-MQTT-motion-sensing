@@ -648,6 +648,10 @@ void setup() {
         }
     }
     DEBUG_PRINTLN("IMU initialization successful!");
+    
+    // Configure IMU wake-up interrupt (required for motion detection!)
+    // 配置 IMU 唤醒中断（运动检测必需！）
+    setupWakeUpInterrupt();
 
     // =========================================================================
     // Configure BLE advertising | 配置 BLE 广播

@@ -167,6 +167,21 @@ void ledsOff() {
 }
 
 // =============================================================================
+// Power Mode Detection | 供电模式检测
+// =============================================================================
+
+/**
+ * Check if USB power is connected (VBUS present)
+ * 检测是否连接 USB 供电（VBUS 存在）
+ * 
+ * @return true if USB powered, false if battery powered
+ *         true 表示 USB 供电，false 表示电池供电
+ */
+bool isUsbPowered() {
+    return (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk);
+}
+
+// =============================================================================
 // BTHome BLE Functions | BTHome BLE 函数
 // =============================================================================
 
@@ -476,6 +491,18 @@ void setup() {
 void loop() {
     static bool inTailWindow = false;
     static unsigned long tailWindowStart = 0;
+    static bool usbMode = false;
+    static bool usbModeChecked = false;
+    
+    // Check power mode once at startup (USB detection)
+    // 启动时检测一次供电模式
+    if (!usbModeChecked) {
+        usbMode = isUsbPowered();
+        usbModeChecked = true;
+        if (usbMode) {
+            DEBUG_PRINTLN(">>> USB Power Mode: Sleep disabled");
+        }
+    }
     
     // Always check motion first (critical for responsiveness)
     // 始终优先检查运动（响应性关键）
@@ -493,6 +520,14 @@ void loop() {
         // Extend/reset the broadcast timer
         // 延长/重置广播计时器
         lastAdvertiseTime = millis();
+        
+        // Visual feedback in USB mode (since we don't sleep)
+        // USB 模式下的视觉反馈（因为不会睡眠）
+        if (usbMode) {
+            setGreenLed(true);
+            delay(30);
+            setGreenLed(false);
+        }
     }
     
     // State machine
@@ -509,7 +544,17 @@ void loop() {
         // Tail window state: check if tail window elapsed
         // 尾随窗口状态：检查尾随窗口是否已过
         if (millis() - tailWindowStart > TAIL_WINDOW_DURATION) {
-            goToSleep();
+            if (usbMode) {
+                // USB mode: don't sleep, just wait for next motion
+                // USB 模式：不睡眠，等待下一次运动
+                inTailWindow = false;
+                // Keep BLE stopped, will restart on next motion
+                // 保持 BLE 停止，下次运动时重启
+            } else {
+                // Battery mode: enter deep sleep
+                // 电池模式：进入深度睡眠
+                goToSleep();
+            }
         }
     }
     

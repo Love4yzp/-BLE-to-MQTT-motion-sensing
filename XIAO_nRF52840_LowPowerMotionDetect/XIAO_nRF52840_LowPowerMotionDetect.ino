@@ -49,12 +49,11 @@
 #include <LSM6DS3.h>
 #include <Wire.h>
 #include <bluefruit.h>
+#include "config.h"
 
 // =============================================================================
-// Debug Configuration | 调试配置
+// Debug Macros | 调试宏
 // =============================================================================
-#define DEBUG_ENABLED 0
-
 #if DEBUG_ENABLED
   #define DEBUG_PRINT(x)    Serial.print(x)
   #define DEBUG_PRINTLN(x)  Serial.println(x)
@@ -95,16 +94,10 @@
 #define BLE_GAP_AD_TYPE_SERVICE_DATA 0x16
 
 // =============================================================================
-// Configuration - Adjustable Parameters | 配置 - 可调参数
+// Derived Constants (from config.h) | 派生常量（来自 config.h）
 // =============================================================================
-
-// Z-axis acceleration threshold for motion detection (in g)
-// 运动检测的 Z 轴加速度阈值（单位：g）
-const float ACCEL_THRESHOLD_Z = 1.30;
-
-// Broadcast duration: how long to advertise before sleep (ms)
-// 广播持续时间：广播多久后进入睡眠（毫秒）
-const unsigned long BROADCAST_DURATION = 500;
+const unsigned long BROADCAST_DURATION = BROADCAST_DURATION_MS;
+const unsigned long TAIL_WINDOW_DURATION = TAIL_WINDOW_MS;
 
 // =============================================================================
 // Global Variables | 全局变量
@@ -117,6 +110,10 @@ LSM6DS3 myIMU(I2C_MODE, 0x6A);
 // Interrupt counter for wake-up detection
 // 唤醒检测的中断计数器
 volatile uint8_t interruptCount = 0;
+
+// Motion interrupt flag for tail window handling
+// 尾随窗口运动中断标志
+volatile bool motionDetected = false;
 
 // Device name and MAC address strings
 // 设备名称和 MAC 地址字符串
@@ -137,6 +134,7 @@ unsigned long lastAdvertiseTime = 0;
  */
 void int1ISR() {
     interruptCount++;
+    motionDetected = true;
 }
 
 // =============================================================================
@@ -227,13 +225,19 @@ void setupWakeUpInterrupt() {
     // 2. 关闭陀螺仪
     myIMU.writeRegister(LSM6DS3_ACC_GYRO_CTRL2_G, 0x00);
     
-    // 3. Enable interrupt, detect Z-axis only
-    // 3. 启用中断，仅检测 Z 轴
-    myIMU.writeRegister(LSM6DS3_ACC_GYRO_TAP_CFG1, 0x83);
+    // 3. Enable interrupts with latching (LIR)
+    //    Bit 7: INTERRUPTS_ENABLE=1, Bit 0: LIR=1 (latch until WAKE_UP_SRC read)
+    // 3. 启用中断并锁存 (LIR)
+    //    位 7: INTERRUPTS_ENABLE=1, 位 0: LIR=1 (锁存直到读取 WAKE_UP_SRC)
+    myIMU.writeRegister(LSM6DS3_ACC_GYRO_TAP_CFG1, 0x81);
     
-    // 4. Wake-up threshold
-    // 4. 唤醒阈值
-    myIMU.writeRegister(LSM6DS3_ACC_GYRO_WAKE_UP_THS, 0x0A);
+    // 4. Wake-up threshold + enable Activity state machine
+    //    Bit 6: SLEEP_ON_OFF=1 (enable state machine), Bits 5:0=threshold
+    //    Uses IMU_WAKEUP_THRESHOLD from deployment config section
+    // 4. 唤醒阈值 + 启用活动状态机
+    //    位 6: SLEEP_ON_OFF=1 (启用状态机), 位 5:0=阈值
+    //    使用部署配置区的 IMU_WAKEUP_THRESHOLD
+    myIMU.writeRegister(LSM6DS3_ACC_GYRO_WAKE_UP_THS, 0x40 | (IMU_WAKEUP_THRESHOLD & 0x3F));
     
     // 5. Wake-up duration
     // 5. 唤醒持续时间
@@ -436,7 +440,7 @@ void setup() {
     // Configure BLE advertising | 配置 BLE 广播
     // =========================================================================
     
-    Bluefruit.setTxPower(4);
+    Bluefruit.setTxPower(BLE_TX_POWER);
     Bluefruit.setName(deviceName);
     
     // Build initial BTHome Service Data (motion=1)
@@ -482,14 +486,32 @@ void setup() {
 }
 
 void loop() {
-    if (millis() - lastAdvertiseTime > BROADCAST_DURATION) {
-        float zAccel = myIMU.readFloatAccelZ();
-        if (zAccel > ACCEL_THRESHOLD_Z) {
-            lastAdvertiseTime = millis();
-        } else {
-            DEBUG_PRINTLN(">>> Sleep");
-            goToSleep();
+    static bool inTailWindow = false;
+    static unsigned long tailWindowStart = 0;
+
+    if (!inTailWindow) {
+        if (millis() - lastAdvertiseTime > BROADCAST_DURATION) {
+            stopBLE();
+            inTailWindow = true;
+            tailWindowStart = millis();
         }
+        delay(10);
+        return;
     }
+
+    if (motionDetected) {
+        motionDetected = false;
+        updateAdvertising(true);
+        lastAdvertiseTime = millis();
+        inTailWindow = false;
+        delay(10);
+        return;
+    }
+
+    if (millis() - tailWindowStart > TAIL_WINDOW_DURATION) {
+        DEBUG_PRINTLN(">>> Sleep");
+        goToSleep();
+    }
+
     delay(10);
 }

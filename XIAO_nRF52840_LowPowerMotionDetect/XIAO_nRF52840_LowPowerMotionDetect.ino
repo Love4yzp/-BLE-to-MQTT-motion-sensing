@@ -217,9 +217,11 @@ void stopBLE() {
  * 为超低功耗模式配置 IMU 唤醒中断
  */
 void setupWakeUpInterrupt() {
-    // 1. Configure accelerometer: 12.5Hz, 2g (lowest power)
-    // 1. 配置加速度计：12.5Hz, 2g（最低功耗）
-    myIMU.writeRegister(LSM6DS3_ACC_GYRO_CTRL1_XL, 0x10);
+    // 1. Configure accelerometer: 26Hz, 2g (better responsiveness, still low power)
+    //    12.5Hz = 0x10, 26Hz = 0x20, 52Hz = 0x30
+    // 1. 配置加速度计：26Hz, 2g（更好的响应性，仍然低功耗）
+    //    12.5Hz = 0x10, 26Hz = 0x20, 52Hz = 0x30
+    myIMU.writeRegister(LSM6DS3_ACC_GYRO_CTRL1_XL, 0x20);
     
     // 2. Disable gyroscope
     // 2. 关闭陀螺仪
@@ -264,42 +266,34 @@ void setupWakeUpInterrupt() {
  * 使用 SoftDevice API 进行正确关闭
  */
 void goToSleep() {
-    DEBUG_PRINTLN("");
-    DEBUG_PRINTLN(">>> Entering deep sleep <<<");
+    DEBUG_PRINTLN(">>> Sleep");
     Serial.flush();
     
     // Stop BLE advertising
     // 停止 BLE 广播
     Bluefruit.Advertising.stop();
-    delay(100);
+    delay(10);
     
     ledsOff();
     
-    // Blue LED blinks 3 times to indicate sleep
-    // 蓝色 LED 闪烁 3 次表示即将睡眠
-    for (int i = 0; i < 3; i++) {
-        setBlueLed(true);
-        delay(200);
-        setBlueLed(false);
-        delay(200);
-    }
+    // Single short LED pulse to indicate sleep (non-blocking)
+    // 单次短 LED 脉冲表示睡眠（非阻塞）
+    setBlueLed(true);
+    delay(50);
+    setBlueLed(false);
     
     // Configure IMU wake-up interrupt
     // 配置 IMU 唤醒中断
     setupWakeUpInterrupt();
-    delay(100);
+    delay(10);
     
-    // Clear any pending interrupt
-    // 清除任何待处理的中断
+    // Detach Arduino interrupt before clearing
+    // 清除前先断开 Arduino 中断
+    detachInterrupt(digitalPinToInterrupt(IMU_INT1_PIN));
+    
+    // Clear any pending/latched interrupt right before sleep
+    // 睡眠前清除任何待处理/锁存的中断
     uint8_t dummy;
-    myIMU.readRegister(&dummy, LSM6DS3_ACC_GYRO_WAKE_UP_SRC);
-    
-    DEBUG_PRINTLN("Waiting 3 seconds before sleep...");
-    Serial.flush();
-    delay(3000);
-    
-    // Clear interrupt again
-    // 再次清除中断
     myIMU.readRegister(&dummy, LSM6DS3_ACC_GYRO_WAKE_UP_SRC);
     
     // Shutdown I2C
@@ -309,10 +303,6 @@ void goToSleep() {
     // Shutdown Serial
     // 关闭串口
     Serial.end();
-    
-    // Detach Arduino interrupt
-    // 断开 Arduino 中断
-    detachInterrupt(digitalPinToInterrupt(IMU_INT1_PIN));
     
     // Configure wake-up pin using SoftDevice API
     // 使用 SoftDevice API 配置唤醒引脚
@@ -325,10 +315,8 @@ void goToSleep() {
     nrf_gpio_pin_set(LED_GREEN_PIN);
     nrf_gpio_pin_set(LED_BLUE_PIN);
     
-    delay(100);
-    
-    // Enter System OFF using SoftDevice
-    // 使用 SoftDevice 进入 System OFF
+    // Enter System OFF immediately
+    // 立即进入 System OFF
     sd_power_system_off();
     
     // Code never reaches here
@@ -488,30 +476,42 @@ void setup() {
 void loop() {
     static bool inTailWindow = false;
     static unsigned long tailWindowStart = 0;
-
+    
+    // Always check motion first (critical for responsiveness)
+    // 始终优先检查运动（响应性关键）
+    if (motionDetected) {
+        noInterrupts();
+        motionDetected = false;
+        interrupts();
+        
+        if (inTailWindow) {
+            // Motion during tail window: restart advertising
+            // 尾随窗口期间检测到运动：重新开始广播
+            updateAdvertising(true);
+            inTailWindow = false;
+        }
+        // Extend/reset the broadcast timer
+        // 延长/重置广播计时器
+        lastAdvertiseTime = millis();
+    }
+    
+    // State machine
+    // 状态机
     if (!inTailWindow) {
+        // Broadcasting state: check if broadcast duration elapsed
+        // 广播状态：检查广播时长是否已过
         if (millis() - lastAdvertiseTime > BROADCAST_DURATION) {
             stopBLE();
             inTailWindow = true;
             tailWindowStart = millis();
         }
-        delay(10);
-        return;
+    } else {
+        // Tail window state: check if tail window elapsed
+        // 尾随窗口状态：检查尾随窗口是否已过
+        if (millis() - tailWindowStart > TAIL_WINDOW_DURATION) {
+            goToSleep();
+        }
     }
-
-    if (motionDetected) {
-        motionDetected = false;
-        updateAdvertising(true);
-        lastAdvertiseTime = millis();
-        inTailWindow = false;
-        delay(10);
-        return;
-    }
-
-    if (millis() - tailWindowStart > TAIL_WINDOW_DURATION) {
-        DEBUG_PRINTLN(">>> Sleep");
-        goToSleep();
-    }
-
+    
     delay(10);
 }

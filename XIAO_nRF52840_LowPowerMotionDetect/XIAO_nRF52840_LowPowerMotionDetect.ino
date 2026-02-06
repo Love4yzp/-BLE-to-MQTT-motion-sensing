@@ -441,13 +441,13 @@ void setupWakeUpInterrupt() {
     //    位 7: INTERRUPTS_ENABLE=1, 位 0: LIR=1 (锁存直到读取 WAKE_UP_SRC)
     myIMU.writeRegister(LSM6DS3_ACC_GYRO_TAP_CFG1, 0x81);
     
-    // 4. Wake-up threshold + enable Activity state machine
-    //    Bit 6: SLEEP_ON_OFF=1 (enable state machine), Bits 5:0=threshold
-    //    Uses IMU_WAKEUP_THRESHOLD from deployment config section
-    // 4. 唤醒阈值 + 启用活动状态机
-    //    位 6: SLEEP_ON_OFF=1 (启用状态机), 位 5:0=阈值
-    //    使用部署配置区的 IMU_WAKEUP_THRESHOLD
-    myIMU.writeRegister(LSM6DS3_ACC_GYRO_WAKE_UP_THS, 0x40 | (rtConfig.threshold & 0x3F));
+    // 4. Wake-up threshold (NO activity state machine)
+    //    Bit 6: SLEEP_ON_OFF=0 (disable state machine - use wake-up pulse only)
+    //    Bits 5:0=threshold
+    // 4. 唤醒阈值（不启用活动状态机）
+    //    位 6: SLEEP_ON_OFF=0 (禁用状态机 - 只使用唤醒脉冲)
+    //    位 5:0=阈值
+    myIMU.writeRegister(LSM6DS3_ACC_GYRO_WAKE_UP_THS, rtConfig.threshold & 0x3F);
     
     // 5. Wake-up duration
     // 5. 唤醒持续时间

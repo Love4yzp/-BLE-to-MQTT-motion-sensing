@@ -714,6 +714,7 @@ void loop() {
     static unsigned long tailWindowStart = 0;
     static bool usbMode = false;
     static bool usbModeChecked = false;
+    static bool lastInt1State = false;
     
     // Check power mode once at startup (USB detection)
     // 启动时检测一次供电模式
@@ -724,6 +725,19 @@ void loop() {
             Serial.println(F(">>> USB Power Mode: Sleep disabled, CLI active"));
             Serial.print(F("INT1 pin state: "));
             Serial.println(digitalRead(IMU_INT1_PIN) ? "HIGH" : "LOW");
+            
+            // Clear any stuck interrupt at startup so INT1 goes LOW
+            // 启动时清除卡住的中断，让 INT1 变为 LOW
+            if (digitalRead(IMU_INT1_PIN) == HIGH) {
+                uint8_t dummy;
+                myIMU.readRegister(&dummy, LSM6DS3_ACC_GYRO_WAKE_UP_SRC);
+                delay(10);
+                Serial.print(F("Cleared latch, INT1 now: "));
+                Serial.println(digitalRead(IMU_INT1_PIN) ? "HIGH (still stuck!)" : "LOW (OK)");
+            }
+            
+            // Initialize lastInt1State to current state
+            lastInt1State = digitalRead(IMU_INT1_PIN);
         }
     }
     
@@ -731,6 +745,12 @@ void loop() {
     // USB 模式：处理 CLI 命令
     if (usbMode) {
         processCLI();
+
+        bool currentInt1State = digitalRead(IMU_INT1_PIN);
+        if (currentInt1State && !lastInt1State) {
+            motionDetected = true;
+        }
+        lastInt1State = currentInt1State;
         
         // Periodic status (every 5 seconds)
         static unsigned long lastStatusTime = 0;

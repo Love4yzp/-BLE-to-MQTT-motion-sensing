@@ -410,14 +410,46 @@ AT+REBOOT
 
 ### 编译环境
 
-1. Arduino IDE + Seeed nRF52 开发板包
+1. Arduino IDE + Seeed nRF52 开发板包 (v1.1.12)
 2. 依赖库：`Seeed Arduino LSM6DS3`
 
 ### 开发板选择
 
 ```
-工具 → 开发板 → Seeed nRF52 Boards → Seeed XIAO nRF52840
+工具 → 开发板 → Seeed nRF52 Boards → Seeed XIAO nRF52840 Sense
 ```
+
+### CLI 编译与上传
+
+```bash
+# 编译
+arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense XIAO_nRF52840_LowPowerMotionDetect/
+
+# 上传
+arduino-cli upload --fqbn Seeeduino:nrf52:xiaonRF52840Sense -p /dev/cu.usbmodem1101 XIAO_nRF52840_LowPowerMotionDetect/
+```
+
+### 代码架构
+
+模块化多文件架构：薄 `.ino` 入口 → `app.h/cpp` 状态机编排器 → 模块层 → 共享类型。
+
+| 文件 | 层级 | 用途 |
+|------|------|------|
+| `.ino` | 入口 | 26 行入口：`static AppContext ctx; setup→appSetup; loop→appLoop` |
+| `config.h` | 0 | 部署配置（阈值、时序、发射功率）— **字段顺序已冻结** |
+| `debug.h` | 0 | 调试打印宏（仅头文件） |
+| `pins.h` | 0 | 硬件引脚定义（仅头文件） |
+| `app_types.h` | 1 | 共享类型：`RuntimeConfig`, `RunState`, `LoopState`, `Telemetry`, `AppContext` |
+| `isr_events.h/cpp` | 2 | ISR 信号传递（`volatile uint32_t` 位域） |
+| `leds.h/cpp` | 2 | LED 控制 |
+| `flash_store.h/cpp` | 2 | NRF_NVMC Flash 持久化 |
+| `imu.h/cpp` | 2 | LSM6DS3 运动检测（IMU 对象文件静态） |
+| `bthome.h/cpp` | 2 | BTHome v2 包构建器（纯逻辑） |
+| `ble_adv.h/cpp` | 2 | BLE 广播（**命名 `ble_adv` 避免 Nordic SDK 冲突**） |
+| `power.h/cpp` | 2 | USB 检测、DC-DC、System OFF 睡眠 |
+| `cli_at.h/cpp` | 2 | AT 命令解析器（8 条命令） |
+| `telemetry.h/cpp` | 2 | 运行时统计与 `[STATUS]` 输出 |
+| `app.h/cpp` | 3 | 状态机编排器 |
 
 ### BTHome 数据格式
 

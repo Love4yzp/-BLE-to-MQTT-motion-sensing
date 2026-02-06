@@ -1,7 +1,12 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "SeeedUA 智慧零售后端 — FastAPI + MQTT"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi[standard]>=0.109.0",
+    "pydantic-settings>=2.0.0",
+    "paho-mqtt>=2.0.0",
+    "jinja2>=3.1.0",
+]

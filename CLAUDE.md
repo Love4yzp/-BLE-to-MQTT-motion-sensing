@@ -23,7 +23,7 @@ Developed in Arduino IDE. No Makefile or PlatformIO — open the `.ino` file dir
 - FQBN: `Seeeduino:nrf52:xiaonRF52840Sense`
 - CLI compile: `arduino-cli compile --fqbn Seeeduino:nrf52:xiaonRF52840Sense XIAO_nRF52840_LowPowerMotionDetect/`
 - Serial monitor: 115200 baud
-- USB mode AT commands for runtime config: `AT+HELP`, `AT+INFO`, `AT+THRESHOLD=0x0A`, `AT+TAILWINDOW=3000`, `AT+TXPOWER=4`, `AT+SAVE`, `AT+REBOOT`
+- USB mode AT commands for runtime config: `AT+HELP`, `AT+INFO`, `AT+THRESHOLD=0x0A`, `AT+TAILWINDOW=3000`, `AT+TXPOWER=4`, `AT+SAVE`, `AT+DEFAULT`, `AT+REBOOT`
 
 **ESP32 Gateway:**
 - Board package: Espressif ESP32 Arduino
@@ -35,13 +35,13 @@ Developed in Arduino IDE. No Makefile or PlatformIO — open the `.ino` file dir
 
 ```bash
 cd backend
-pip install -r requirements.txt
-python main.py                    # http://localhost:8080
+uv sync                           # install dependencies
+uv run python main.py             # http://localhost:8080
 # or
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8080
 ```
 
-Configuration via environment variables or `.env` file (see `config.py` — Pydantic BaseSettings).
+Configuration via environment variables or `.env` file (see `config.py` — Pydantic BaseSettings). Uses `uv` for dependency management (`pyproject.toml` + `uv.lock`).
 
 ## Architecture — Data Flow
 
@@ -53,15 +53,40 @@ nRF52840 Sensor (BLE broadcast, BTHome UUID 0xFCD2)
     → Display Player (plays video)
 ```
 
+## nRF52840 Sensor — Modular Architecture
+
+Thin `.ino` entry point → `app.h/cpp` state machine orchestrator → module layer → shared types.
+
+| File | Layer | Purpose |
+|------|-------|---------|
+| `XIAO_nRF52840_LowPowerMotionDetect.ino` | Entry | 26-line entry: `static AppContext ctx; setup→appSetup; loop→appLoop` |
+| `config.h` | 0 | Deployment config (thresholds, timing, TX power) — **FROZEN, never modify field order** |
+| `debug.h` | 0 | Debug print macros (header-only) |
+| `pins.h` | 0 | Hardware pin definitions (header-only) |
+| `app_types.h` | 1 | Shared types: `RuntimeConfig`, `RunState`, `LoopState`, `Telemetry`, `AppContext` |
+| `isr_events.h/cpp` | 2 | ISR signaling via `volatile uint32_t` bitfield, `isrFetchAndClearEvents()` |
+| `leds.h/cpp` | 2 | LED control: init, green, blue, off |
+| `flash_store.h/cpp` | 2 | NRF_NVMC flash persistence for `RuntimeConfig` |
+| `imu.h/cpp` | 2 | LSM6DS3 motion detection (IMU object is file-static) |
+| `bthome.h/cpp` | 2 | BTHome v2 packet builder (pure logic, no HW deps) |
+| `ble_adv.h/cpp` | 2 | Bluefruit BLE advertising (**named `ble_adv` NOT `ble` — Nordic SDK collision**) |
+| `power.h/cpp` | 2 | USB detection, DC-DC enable, System OFF sleep |
+| `cli_at.h/cpp` | 2 | AT command parser (8 commands) |
+| `telemetry.h/cpp` | 2 | Runtime stats: `adv_ms`, `tail_ms`, `idle_ms`, motion count, `[STATUS]` output |
+| `app.h/cpp` | 3 | State machine orchestrator calling all modules |
+
+Key design: `AppContext` struct bundles all mutable state (no globals), ISR event bitfield with atomic fetch-and-clear, file-static encapsulation, 5-layer include hierarchy (no circular deps).
+
 ## Key Technical Details
 
 ### nRF52840 Sensor
 
 - **Power modes**: Auto-detects USB vs battery via VBUS voltage. USB mode enables serial CLI + diagnostic output. Battery mode is production (deep sleep → wake → broadcast → sleep).
 - **Motion detection**: LSM6DS3 wake-up interrupt on INT1 (GPIO P0.11). Threshold configurable 0x02-0x3F (value × 31.25mg). No activity state machine — uses wake-up pulse only.
+- **USB motion detection**: INT1 uses latched interrupt (LIR=1). With RISING-edge ISR, if INT1 stays latched HIGH the ISR never re-fires. USB mode uses polling fallback: reads `WAKE_UP_SRC` register bit 3 (`WU_IA`) to detect motion when ISR misses edges. Boot clears stale latch + ISR events.
 - **Broadcast cycle**: Wake → 300ms fast BLE advertising (20ms interval) → 3s tail window (listens for more motion) → sleep.
 - **Sensitivity presets** in `config.h`: 0=custom, 1=high, 2=standard (default), 3=low. Affects threshold, tail window, TX power.
-- **Flash storage**: Runtime config persisted to last 4KB page of nRF52840 flash (custom implementation, not NVMC library).
+- **Flash storage**: Runtime config persisted to last 4KB page of nRF52840 flash (custom NRF_NVMC implementation). `RuntimeConfig` struct field order is FROZEN — binary compatibility with devices that already have flash-stored configs.
 - **LED pins**: GPIO12 (blue), GPIO13 (green). Green flash = motion detected, blue flash = entering sleep.
 
 ### ESP32 Gateway
@@ -79,6 +104,7 @@ nRF52840 Sensor (BLE broadcast, BTHome UUID 0xFCD2)
 - **Sensor timeout**: Background thread checks every 1s. If no motion for `sensor_timeout` (default 5s), emits "put_down" event.
 - **Event log**: In-memory ring buffer, last 100 events.
 - **i18n**: Chinese (zh) and English (en), translation files in `backend/locales/`.
+- **Threading**: Daemon threads for MQTT client loop and timeout checker, initialized in FastAPI lifespan context manager.
 - **Threading**: Daemon threads for MQTT client loop and timeout checker, initialized in FastAPI lifespan context manager.
 
 ## MQTT Topic Reference

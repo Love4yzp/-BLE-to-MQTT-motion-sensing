@@ -7,26 +7,32 @@ FastAPI + MQTT 后端服务，提供产品映射管理、网关管理和实时�
 ```bash
 cd backend
 
-# 安装依赖
-pip install -r requirements.txt
+# 安装依赖（使用 uv）
+uv sync
 
-# 启动服务（默认端口 8000）
-python main.py
+# 编辑 .env 配置 MQTT 地址等（参考 .env.example）
+cp .env.example .env
 
-# 或使用 uvicorn
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# 启动服务（默认端口 8080）
+uv run python main.py
+
+# 或使用 uvicorn（开发模式）
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8080
 ```
 
-打开浏览器访问: http://localhost:8000
+打开浏览器访问: http://localhost:8080
 
 ## 配置
 
-修改 `main.py` 顶部的配置：
+通过 `.env` 文件或环境变量配置（参见 `config.py` — Pydantic BaseSettings）：
 
-```python
-MQTT_BROKER = "localhost"  # MQTT 服务器地址
-MQTT_PORT = 1883           # MQTT 端口
-DEDUP_WINDOW = 2.0         # 去重时间窗口（秒）
+```bash
+MQTT_BROKER=localhost      # MQTT 服务器地址
+MQTT_PORT=1883             # MQTT 端口
+DEDUP_WINDOW=2.0           # 去重时间窗口（秒）
+SENSOR_TIMEOUT=5.0         # 传感器超时（秒），超时后视为放下
+SERVER_HOST=0.0.0.0        # 监听地址
+SERVER_PORT=8080           # 服务端口
 ```
 
 ## 功能

@@ -1,10 +1,10 @@
 #include <Arduino.h>
 #include <bluefruit.h>
-#include "ble_adv.h"
-#include "bthome.h"
-#include "app_types.h"
+#include "comm_ble_adv.h"
+#include "comm_bthome.h"
+#include "core_types.h"
 
-void bleInit(AppContext& ctx) {
+void commBleInit(AppContext& ctx) {
     Bluefruit.begin();
 
     uint8_t mac[6];
@@ -21,12 +21,12 @@ void bleInit(AppContext& ctx) {
     Bluefruit.setName(ctx.deviceName);
 }
 
-void bleStartAdvertising(bool motionDetected) {
+void commBleStartAdvertising(bool motionDetected) {
     Bluefruit.Advertising.stop();
     Bluefruit.Advertising.clearData();
 
     uint8_t serviceData[8];
-    uint8_t len = bthomeBuildMotionPacket(serviceData, sizeof(serviceData), motionDetected);
+    uint8_t len = commBthomeBuildMotionPacket(serviceData, sizeof(serviceData), motionDetected);
 
     Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
     Bluefruit.Advertising.addName();
@@ -36,7 +36,7 @@ void bleStartAdvertising(bool motionDetected) {
     Bluefruit.Advertising.start(0);
 }
 
-void bleStop() {
+void commBleStop() {
     Bluefruit.Advertising.stop();
     delay(10);
 }

@@ -1,28 +1,55 @@
 #include <Arduino.h>
-#include "app.h"
-#include "app_types.h"
-#include "debug.h"
-#include "pins.h"
-#include "leds.h"
-#include "flash_store.h"
-#include "imu.h"
-#include "isr_events.h"
-#include "ble_adv.h"
-#include "power.h"
-#include "cli_at.h"
-#include "telemetry.h"
+#include "app_main.h"
+#include "core_types.h"
+#include "core_debug.h"
+#include "bsp_pins.h"
+#include "bsp_leds.h"
+#include "app_config_store.h"
+#include "sensor_motion.h"
+#include "core_isr_events.h"
+#include "comm_ble_adv.h"
+#include "bsp_power.h"
+#include "app_cli.h"
+#include "app_telemetry.h"
 
 // Helper: transition run state and update telemetry
 // 辅助：转换运行状态并更新遥测
 static void transitionState(AppContext& ctx, RunState next, unsigned long nowMs) {
-    telemetryOnTransition(ctx.telem, next, nowMs);
+    appTelemetryOnTransition(ctx.telem, next, nowMs);
     ctx.loop.runState = next;
+}
+
+static void appEnterSleep(AppContext& ctx) {
+    DEBUG_PRINTLN(">>> Sleep");
+    Serial.flush();
+
+    commBleStop();
+
+    bspLedsOff();
+    bspLedsSetBlue(true);
+    delay(50);
+    bspLedsSetBlue(false);
+
+    sensorMotionConfigureWake(ctx.config.threshold);
+    delay(10);
+    sensorMotionDetachInterrupt();
+    sensorMotionClearLatch();
+    sensorMotionShutdown();
+    Serial.end();
+
+    // Set LED pins HIGH (off) before system off
+    nrf_gpio_cfg_output(LED_GREEN_PIN);
+    nrf_gpio_cfg_output(LED_BLUE_PIN);
+    nrf_gpio_pin_set(LED_GREEN_PIN);
+    nrf_gpio_pin_set(LED_BLUE_PIN);
+
+    bspPowerSystemOff(IMU_INT1_PIN);
 }
 
 void appSetup(AppContext& ctx) {
     // Detect USB power first (determines Serial init)
     // 先检测 USB 供电（决定是否初始化串口）
-    ctx.usbPowered = powerIsUsbPowered();
+    ctx.usbPowered = bspPowerIsUsb();
 
 #if DEBUG_ENABLED
     Serial.begin(115200);
@@ -42,7 +69,7 @@ void appSetup(AppContext& ctx) {
         TAIL_WINDOW_MS,
         BLE_TX_POWER
     };
-    if (flashLoadConfig(ctx.config)) {
+    if (configLoad(ctx.config)) {
         DEBUG_PRINTLN("Config loaded from flash");
     } else {
         DEBUG_PRINTLN("Using default config");
@@ -67,17 +94,17 @@ void appSetup(AppContext& ctx) {
     DEBUG_PRINTLN(wokeFromSleep ? ">>> Woke from sleep (motion triggered) <<<" : ">>> Normal power-on <<<");
     DEBUG_PRINTLN("");
 
-    powerEnableDCDC();
+    bspPowerEnableDCDC();
 
     // Initialize LEDs | 初始化 LED
-    ledsInit();
-    ledsSetGreen(true);
+    bspLedsInit();
+    bspLedsSetGreen(true);
     delay(wokeFromSleep ? 30 : 100);
-    ledsSetGreen(false);
+    bspLedsSetGreen(false);
 
     // Initialize BLE (gets MAC, sets name + TX power)
     // 初始化 BLE（获取 MAC，设置名称和发射功率）
-    bleInit(ctx);
+    commBleInit(ctx);
 
     DEBUG_PRINT("MAC Address: ");
     DEBUG_PRINTLN(ctx.macStr);
@@ -86,38 +113,38 @@ void appSetup(AppContext& ctx) {
     DEBUG_PRINTLN("");
 
     // Initialize IMU | 初始化 IMU
-    if (!imuInit()) {
+    if (!sensorMotionInit()) {
         DEBUG_PRINTLN("IMU initialization failed!");
         while (1) {
-            ledsSetBlue(true);
+            bspLedsSetBlue(true);
             delay(500);
-            ledsSetBlue(false);
+            bspLedsSetBlue(false);
             delay(500);
         }
     }
     DEBUG_PRINTLN("IMU initialization successful!");
 
-    imuAttachInterrupt();
-    imuConfigureWake(ctx.config.threshold);
+    sensorMotionAttachInterrupt();
+    sensorMotionConfigureWake(ctx.config.threshold);
 
     // Start advertising based on wake-up reason
     // 根据唤醒原因开始广播
     if (wokeFromSleep) {
         DEBUG_PRINTLN("Motion wake!");
-        bleStartAdvertising(true);
+        commBleStartAdvertising(true);
     } else {
         DEBUG_PRINTLN("Normal power-on, starting advertising...");
-        bleStartAdvertising(true);
+        commBleStartAdvertising(true);
     }
 
     // Initialize loop state | 初始化循环状态
     ctx.loop = { RunState::Broadcasting, false, false, false, millis(), 0 };
-    telemetryReset(ctx.telem, ctx.loop.lastAdvertiseTime, RunState::Broadcasting);
+    appTelemetryReset(ctx.telem, ctx.loop.lastAdvertiseTime, RunState::Broadcasting);
 
     DEBUG_PRINTLN("Ready. Will sleep after broadcast.");
 
     if (ctx.usbPowered) {
-        cliInit(ctx);
+        appCliInit(ctx);
     }
 }
 
@@ -126,7 +153,7 @@ void appLoop(AppContext& ctx) {
 
     // USB mode detection (once) | USB 模式检测（一次）
     if (!ctx.loop.usbModeChecked) {
-        ctx.loop.usbMode = powerIsUsbPowered();
+        ctx.loop.usbMode = bspPowerIsUsb();
         ctx.loop.usbModeChecked = true;
         if (ctx.loop.usbMode) {
             Serial.println(F(">>> USB Power Mode: Sleep disabled, CLI active"));
@@ -134,7 +161,7 @@ void appLoop(AppContext& ctx) {
             Serial.println(digitalRead(IMU_INT1_PIN) ? "HIGH" : "LOW");
 
             if (digitalRead(IMU_INT1_PIN) == HIGH) {
-                imuClearLatchedInterrupt();
+                sensorMotionClearLatch();
                 delay(10);
                 isrFetchAndClearEvents();  // Discard ISR events from boot latch
                 Serial.print(F("Cleared latch, INT1 now: "));
@@ -148,8 +175,10 @@ void appLoop(AppContext& ctx) {
     // USB mode: CLI + polling telemetry
     // USB 模式：CLI + 轮询遥测
     if (ctx.loop.usbMode) {
-        cliPoll(ctx);
-        telemetryPrintIfDue(ctx, nowMs);
+        appCliPoll(ctx);
+        ctx.telem.lastInt1Level = digitalRead(IMU_INT1_PIN);
+        ctx.telem.isrCount = isrGetInterruptCount();
+        appTelemetryPrintIfDue(ctx, nowMs);
     }
 
     // Check ISR events | 检查 ISR 事件
@@ -161,7 +190,7 @@ void appLoop(AppContext& ctx) {
     // USB 回退：如果 INT1 为高（已锁存）但 ISR 未捕获上升沿，
     // 读取 WAKE_UP_SRC 确认真实唤醒事件并清除锁存。
     if (ctx.loop.usbMode && !motionEvent && digitalRead(IMU_INT1_PIN)) {
-        uint8_t src = imuClearLatchedInterrupt();
+        uint8_t src = sensorMotionClearLatch();
         // Bit 3 (WU_IA) = wake-up event detected
         if (src & 0x08) {
             motionEvent = true;
@@ -169,7 +198,7 @@ void appLoop(AppContext& ctx) {
     }
 
     if (motionEvent) {
-        uint8_t wakeUpSrc = imuClearLatchedInterrupt();
+        uint8_t wakeUpSrc = sensorMotionClearLatch();
 
         if (ctx.loop.usbMode) {
             Serial.print(F("[MOTION] cnt="));
@@ -183,26 +212,26 @@ void appLoop(AppContext& ctx) {
         ctx.telem.motionCount++;
 
         if (ctx.loop.runState == RunState::TailWindow) {
-            bleStartAdvertising(true);
+            commBleStartAdvertising(true);
             transitionState(ctx, RunState::Broadcasting, nowMs);
         } else if (ctx.loop.usbMode) {
-            bleStartAdvertising(true);
+            commBleStartAdvertising(true);
             transitionState(ctx, RunState::Broadcasting, nowMs);
         }
 
         ctx.loop.lastAdvertiseTime = nowMs;
 
         if (ctx.loop.usbMode) {
-            ledsSetGreen(true);
+            bspLedsSetGreen(true);
             delay(30);
-            ledsSetGreen(false);
+            bspLedsSetGreen(false);
         }
     }
 
     // State machine | 状态机
     if (ctx.loop.runState == RunState::Broadcasting) {
         if (nowMs - ctx.loop.lastAdvertiseTime > BROADCAST_DURATION) {
-            bleStop();
+            commBleStop();
             ctx.loop.tailWindowStart = nowMs;
             transitionState(ctx, RunState::TailWindow, nowMs);
         }
@@ -211,7 +240,7 @@ void appLoop(AppContext& ctx) {
             if (ctx.loop.usbMode) {
                 transitionState(ctx, RunState::UsbIdle, nowMs);
             } else {
-                powerEnterSystemOff(ctx.config);
+                appEnterSleep(ctx);
             }
         }
     }

@@ -55,27 +55,28 @@ nRF52840 Sensor (BLE broadcast, BTHome UUID 0xFCD2)
 
 ## nRF52840 Sensor — Modular Architecture
 
-Thin `.ino` entry point → `app.h/cpp` state machine orchestrator → module layer → shared types.
+Thin `.ino` entry point → `app_main.h/cpp` state machine orchestrator → module layer → shared types. Files use prefix-based naming by domain: `core_*` (types/ISR/debug), `bsp_*` (board support), `sensor_*` (IMU driver), `comm_*` (BLE/BTHome), `app_*` (application logic).
 
-| File | Layer | Purpose |
-|------|-------|---------|
+| File | Prefix/Layer | Purpose |
+|------|--------------|---------|
 | `XIAO_nRF52840_LowPowerMotionDetect.ino` | Entry | 26-line entry: `static AppContext ctx; setup→appSetup; loop→appLoop` |
-| `config.h` | 0 | Deployment config (thresholds, timing, TX power) — **FROZEN, never modify field order** |
-| `debug.h` | 0 | Debug print macros (header-only) |
-| `pins.h` | 0 | Hardware pin definitions (header-only) |
-| `app_types.h` | 1 | Shared types: `RuntimeConfig`, `RunState`, `LoopState`, `Telemetry`, `AppContext` |
-| `isr_events.h/cpp` | 2 | ISR signaling via `volatile uint32_t` bitfield, `isrFetchAndClearEvents()` |
-| `leds.h/cpp` | 2 | LED control: init, green, blue, off |
-| `flash_store.h/cpp` | 2 | NRF_NVMC flash persistence for `RuntimeConfig` |
-| `imu.h/cpp` | 2 | LSM6DS3 motion detection (IMU object is file-static) |
-| `bthome.h/cpp` | 2 | BTHome v2 packet builder (pure logic, no HW deps) |
-| `ble_adv.h/cpp` | 2 | Bluefruit BLE advertising (**named `ble_adv` NOT `ble` — Nordic SDK collision**) |
-| `power.h/cpp` | 2 | USB detection, DC-DC enable, System OFF sleep |
-| `cli_at.h/cpp` | 2 | AT command parser (8 commands) |
-| `telemetry.h/cpp` | 2 | Runtime stats: `adv_ms`, `tail_ms`, `idle_ms`, motion count, `[STATUS]` output |
-| `app.h/cpp` | 3 | State machine orchestrator calling all modules |
+| `config.h` | Config (L0) | Deployment config (thresholds, timing, TX power) — **FROZEN, never modify field order** |
+| `core_debug.h` | `core_` (L0) | Debug print macros (header-only) |
+| `bsp_pins.h` | `bsp_` (L0) | Hardware pin definitions (header-only) |
+| `core_types.h` | `core_` (L1) | Shared types: `RuntimeConfig`, `RunState`, `LoopState`, `Telemetry`, `AppContext` |
+| `core_isr_events.h/cpp` | `core_` (L2) | ISR signaling via `volatile uint32_t` bitfield, `isrFetchAndClearEvents()` |
+| `bsp_leds.h/cpp` | `bsp_` (L2) | LED control: init, green, blue, off |
+| `bsp_flash.h/cpp` | `bsp_` (L2) | NRF_NVMC flash read/write primitives |
+| `bsp_power.h/cpp` | `bsp_` (L2) | USB detection, DC-DC enable, System OFF sleep |
+| `sensor_motion.h/cpp` | `sensor_` (L2) | LSM6DS3 motion detection (IMU object is file-static) |
+| `comm_bthome.h/cpp` | `comm_` (L2) | BTHome v2 packet builder (pure logic, no HW deps) |
+| `comm_ble_adv.h/cpp` | `comm_` (L2) | Bluefruit BLE advertising (**named `comm_ble_adv` NOT `ble` — Nordic SDK collision**) |
+| `app_cli.h/cpp` | `app_` (L2) | AT command parser (8 commands) |
+| `app_telemetry.h/cpp` | `app_` (L2) | Runtime stats: `adv_ms`, `tail_ms`, `idle_ms`, motion count, `[STATUS]` output |
+| `app_config_store.h/cpp` | `app_` (L2) | Config load/save using `bsp_flash` primitives |
+| `app_main.h/cpp` | `app_` (L3) | State machine orchestrator calling all modules |
 
-Key design: `AppContext` struct bundles all mutable state (no globals), ISR event bitfield with atomic fetch-and-clear, file-static encapsulation, 5-layer include hierarchy (no circular deps).
+Key design: `AppContext` struct bundles all mutable state (no globals), ISR event bitfield with atomic fetch-and-clear, file-static encapsulation, prefix-based naming for clear domain boundaries, no circular deps.
 
 ## Key Technical Details
 
@@ -120,5 +121,5 @@ Key design: `AppContext` struct bundles all mutable state (no globals), ISR even
 
 - MAC addresses are normalized to lowercase hex without colons (e.g., `f7dac49b63d1`).
 - Commit messages follow conventional commits: `fix(sensor):`, `feat(gateway):`, `docs:`, `debug(sensor):`.
-- The nRF52840 firmware uses a modular multi-file architecture: thin `.ino` entry point → `app.h/cpp` orchestrator → module files (`ble_adv`, `imu`, `power`, `flash_store`, `cli_at`, `telemetry`, etc.). Note: `ble_adv.h` (not `ble.h`) to avoid name collision with Nordic SDK's `ble.h`.
+- The nRF52840 firmware uses a modular multi-file architecture with prefix-based naming: thin `.ino` entry point → `app_main.h/cpp` orchestrator → module files with domain prefixes (`core_*`, `bsp_*`, `sensor_*`, `comm_*`, `app_*`). Note: `comm_ble_adv.h` (not `ble.h`) to avoid name collision with Nordic SDK's `ble.h`.
 - Both firmware projects use `config.h` for deployment-specific settings (credentials, sensitivity presets).

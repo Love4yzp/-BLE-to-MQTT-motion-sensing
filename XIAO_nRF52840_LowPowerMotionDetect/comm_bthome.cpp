@@ -1,7 +1,7 @@
-#include "bthome.h"
-#include "app_types.h"
+#include "comm_bthome.h"
+#include "core_types.h"
 
-uint8_t bthomeBuildMotionPacket(uint8_t* buf, uint8_t bufSize, bool motionDetected) {
+uint8_t commBthomeBuildMotionPacket(uint8_t* buf, uint8_t bufSize, bool motionDetected) {
     if (bufSize < 5) return 0;
 
     uint8_t len = 0;

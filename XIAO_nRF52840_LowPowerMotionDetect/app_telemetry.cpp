@@ -1,10 +1,8 @@
 #include <Arduino.h>
-#include "telemetry.h"
-#include "app_types.h"
-#include "pins.h"
-#include "isr_events.h"
+#include "app_telemetry.h"
+#include "core_types.h"
 
-void telemetryReset(Telemetry& t, unsigned long nowMs, RunState initialState) {
+void appTelemetryReset(Telemetry& t, unsigned long nowMs, RunState initialState) {
     t.runState = initialState;
     t.lastStateChangeMs = nowMs;
     t.lastStatusMs = nowMs;
@@ -12,9 +10,11 @@ void telemetryReset(Telemetry& t, unsigned long nowMs, RunState initialState) {
     t.advertiseMs = 0;
     t.tailWindowMs = 0;
     t.idleMs = 0;
+    t.lastInt1Level = false;
+    t.isrCount = 0;
 }
 
-void telemetryOnTransition(Telemetry& t, RunState nextState, unsigned long nowMs) {
+void appTelemetryOnTransition(Telemetry& t, RunState nextState, unsigned long nowMs) {
     if (t.runState != nextState) {
         unsigned long delta = nowMs - t.lastStateChangeMs;
         if (t.runState == RunState::Broadcasting) {
@@ -29,7 +29,7 @@ void telemetryOnTransition(Telemetry& t, RunState nextState, unsigned long nowMs
     }
 }
 
-void telemetryPrintIfDue(AppContext& ctx, unsigned long nowMs) {
+void appTelemetryPrintIfDue(AppContext& ctx, unsigned long nowMs) {
     if (!ctx.loop.usbMode) return;
     if (nowMs - ctx.telem.lastStatusMs <= 5000) return;
 
@@ -48,9 +48,9 @@ void telemetryPrintIfDue(AppContext& ctx, unsigned long nowMs) {
     }
 
     Serial.print(F("[STATUS] INT1="));
-    Serial.print(digitalRead(IMU_INT1_PIN) ? "HIGH" : "LOW");
+    Serial.print(ctx.telem.lastInt1Level ? "HIGH" : "LOW");
     Serial.print(F(" cnt="));
-    Serial.print(isrGetInterruptCount());
+    Serial.print(ctx.telem.isrCount);
     Serial.print(F(" motion="));
     Serial.print(ctx.telem.motionCount);
     Serial.print(F(" tail="));

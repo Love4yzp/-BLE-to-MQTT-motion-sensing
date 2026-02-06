@@ -1,24 +1,24 @@
 #include <Arduino.h>
-#include "leds.h"
-#include "pins.h"
+#include "bsp_leds.h"
+#include "bsp_pins.h"
 
-void ledsInit() {
+void bspLedsInit() {
     pinMode(LED_GREEN_PIN, OUTPUT);
     pinMode(LED_BLUE_PIN, OUTPUT);
-    ledsOff();
+    bspLedsOff();
 }
 
 // Active LOW: LED on when pin LOW
 // 低电平点亮：引脚为 LOW 时 LED 亮
-void ledsSetGreen(bool on) {
+void bspLedsSetGreen(bool on) {
     digitalWrite(LED_GREEN_PIN, on ? LOW : HIGH);
 }
 
-void ledsSetBlue(bool on) {
+void bspLedsSetBlue(bool on) {
     digitalWrite(LED_BLUE_PIN, on ? LOW : HIGH);
 }
 
-void ledsOff() {
-    ledsSetGreen(false);
-    ledsSetBlue(false);
+void bspLedsOff() {
+    bspLedsSetGreen(false);
+    bspLedsSetBlue(false);
 }

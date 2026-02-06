@@ -1,10 +1,10 @@
 #include <Arduino.h>
-#include "isr_events.h"
+#include "core_isr_events.h"
 
 static volatile uint32_t g_events = 0;
 static volatile uint8_t g_interruptCount = 0;
 
-void imuInt1Isr() {
+void isrMotionHandler() {
     g_events |= EVT_MOTION;
     g_interruptCount++;
 }

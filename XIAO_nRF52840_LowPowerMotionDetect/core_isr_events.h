@@ -7,7 +7,7 @@
 
 // ISR function — passed to attachInterrupt()
 // ISR 函数 — 传给 attachInterrupt()
-void imuInt1Isr();
+void isrMotionHandler();
 
 // Atomically read and clear all pending events
 // 原子性读取并清除所有待处理事件

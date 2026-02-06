@@ -1,7 +1,7 @@
 #include <Arduino.h>
-#include "cli_at.h"
-#include "app_types.h"
-#include "flash_store.h"
+#include "app_cli.h"
+#include "core_types.h"
+#include "app_config_store.h"
 
 static char cmdBuffer[64] = {0};
 static uint8_t cmdIndex = 0;
@@ -83,7 +83,7 @@ static void processCommand(AppContext& ctx, const char* cmd) {
         }
     }
     else if (strncmp(upperCmd, "AT+SAVE", 7) == 0) {
-        flashSaveConfig(ctx.config);
+        configSave(ctx.config);
         Serial.println(F("OK Config saved to flash"));
     }
     else if (strncmp(upperCmd, "AT+DEFAULT", 10) == 0) {
@@ -104,12 +104,12 @@ static void processCommand(AppContext& ctx, const char* cmd) {
     }
 }
 
-void cliInit(AppContext& ctx) {
+void appCliInit(AppContext& ctx) {
     Serial.println(F("CLI ready. Type AT+HELP for commands."));
     Serial.println();
 }
 
-void cliPoll(AppContext& ctx) {
+void appCliPoll(AppContext& ctx) {
     while (Serial.available()) {
         char c = Serial.read();
 

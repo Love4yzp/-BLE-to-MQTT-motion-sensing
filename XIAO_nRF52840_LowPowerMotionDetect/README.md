@@ -431,25 +431,26 @@ arduino-cli upload --fqbn Seeeduino:nrf52:xiaonRF52840Sense -p /dev/cu.usbmodem1
 
 ### 代码架构
 
-模块化多文件架构：薄 `.ino` 入口 → `app.h/cpp` 状态机编排器 → 模块层 → 共享类型。
+模块化多文件架构：薄 `.ino` 入口 → `app_main.h/cpp` 状态机编排器 → 模块层 → 共享类型。文件使用前缀命名，按域划分：`core_*`（类型/ISR/调试）、`bsp_*`（板级支持）、`sensor_*`（IMU 驱动）、`comm_*`（BLE/BTHome）、`app_*`（应用逻辑）。
 
-| 文件 | 层级 | 用途 |
-|------|------|------|
+| 文件 | 前缀/层级 | 用途 |
+|------|-----------|------|
 | `.ino` | 入口 | 26 行入口：`static AppContext ctx; setup→appSetup; loop→appLoop` |
-| `config.h` | 0 | 部署配置（阈值、时序、发射功率）— **字段顺序已冻结** |
-| `debug.h` | 0 | 调试打印宏（仅头文件） |
-| `pins.h` | 0 | 硬件引脚定义（仅头文件） |
-| `app_types.h` | 1 | 共享类型：`RuntimeConfig`, `RunState`, `LoopState`, `Telemetry`, `AppContext` |
-| `isr_events.h/cpp` | 2 | ISR 信号传递（`volatile uint32_t` 位域） |
-| `leds.h/cpp` | 2 | LED 控制 |
-| `flash_store.h/cpp` | 2 | NRF_NVMC Flash 持久化 |
-| `imu.h/cpp` | 2 | LSM6DS3 运动检测（IMU 对象文件静态） |
-| `bthome.h/cpp` | 2 | BTHome v2 包构建器（纯逻辑） |
-| `ble_adv.h/cpp` | 2 | BLE 广播（**命名 `ble_adv` 避免 Nordic SDK 冲突**） |
-| `power.h/cpp` | 2 | USB 检测、DC-DC、System OFF 睡眠 |
-| `cli_at.h/cpp` | 2 | AT 命令解析器（8 条命令） |
-| `telemetry.h/cpp` | 2 | 运行时统计与 `[STATUS]` 输出 |
-| `app.h/cpp` | 3 | 状态机编排器 |
+| `config.h` | 配置 (L0) | 部署配置（阈值、时序、发射功率）— **字段顺序已冻结** |
+| `core_debug.h` | `core_` (L0) | 调试打印宏（仅头文件） |
+| `bsp_pins.h` | `bsp_` (L0) | 硬件引脚定义（仅头文件） |
+| `core_types.h` | `core_` (L1) | 共享类型：`RuntimeConfig`, `RunState`, `LoopState`, `Telemetry`, `AppContext` |
+| `core_isr_events.h/cpp` | `core_` (L2) | ISR 信号传递（`volatile uint32_t` 位域） |
+| `bsp_leds.h/cpp` | `bsp_` (L2) | LED 控制 |
+| `bsp_flash.h/cpp` | `bsp_` (L2) | NRF_NVMC Flash 读写原语 |
+| `bsp_power.h/cpp` | `bsp_` (L2) | USB 检测、DC-DC、System OFF 睡眠 |
+| `sensor_motion.h/cpp` | `sensor_` (L2) | LSM6DS3 运动检测（IMU 对象文件静态） |
+| `comm_bthome.h/cpp` | `comm_` (L2) | BTHome v2 包构建器（纯逻辑） |
+| `comm_ble_adv.h/cpp` | `comm_` (L2) | BLE 广播（**命名 `comm_ble_adv` 避免 Nordic SDK 冲突**） |
+| `app_cli.h/cpp` | `app_` (L2) | AT 命令解析器（8 条命令） |
+| `app_telemetry.h/cpp` | `app_` (L2) | 运行时统计与 `[STATUS]` 输出 |
+| `app_config_store.h/cpp` | `app_` (L2) | 配置加载/保存（使用 `bsp_flash` 原语） |
+| `app_main.h/cpp` | `app_` (L3) | 状态机编排器 |
 
 ### BTHome 数据格式
 

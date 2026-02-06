@@ -6,13 +6,13 @@
  * Shared vocabulary types used across all firmware modules.
  * 所有固件模块共享的类型定义。
  *
- * Include hierarchy: Layer 1 (depends only on config.h, pins.h)
- * 包含层级：第 1 层（仅依赖 config.h、pins.h）
+ * Include hierarchy: Layer 1 (depends only on config.h, bsp_pins.h)
+ * 包含层级：第 1 层（仅依赖 config.h、bsp_pins.h）
  */
 
-#include <Arduino.h>
+#include <stdint.h>
 #include "config.h"
-#include "pins.h"
+#include "bsp_pins.h"
 
 // =============================================================================
 // BTHome Protocol Constants | BTHome 协议常量
@@ -109,6 +109,8 @@ struct Telemetry {
     uint32_t advertiseMs;             // Cumulative advertising time (ms) | 累计广播时间
     uint32_t tailWindowMs;            // Cumulative tail window time (ms) | 累计尾随窗口时间
     uint32_t idleMs;                  // Cumulative idle time (ms) | 累计空闲时间
+    bool lastInt1Level;               // Snapshot of INT1 pin for telemetry display
+    uint8_t isrCount;                 // Snapshot of ISR count for telemetry display
 };
 
 // =============================================================================

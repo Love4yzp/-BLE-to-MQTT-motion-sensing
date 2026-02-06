@@ -13,7 +13,7 @@
  * @author limengdu
  */
 
-#include "app.h"
+#include "app_main.h"
 
 static AppContext ctx;
 

@@ -1,18 +1,18 @@
 #include <Arduino.h>
 #include <LSM6DS3.h>
 #include <Wire.h>
-#include "imu.h"
-#include "pins.h"
-#include "isr_events.h"
+#include "sensor_motion.h"
+#include "bsp_pins.h"
+#include "core_isr_events.h"
 
 static LSM6DS3 myIMU(I2C_MODE, 0x6A);
 
-bool imuInit() {
+bool sensorMotionInit() {
     pinMode(IMU_INT1_PIN, INPUT);
     return (myIMU.begin() == 0);
 }
 
-void imuConfigureWake(uint8_t threshold) {
+void sensorMotionConfigureWake(uint8_t threshold) {
     // Accelerometer: 26Hz, 2g | 加速度计：26Hz, 2g
     // 12.5Hz = 0x10, 26Hz = 0x20, 52Hz = 0x30
     myIMU.writeRegister(LSM6DS3_ACC_GYRO_CTRL1_XL, 0x20);
@@ -41,20 +41,20 @@ void imuConfigureWake(uint8_t threshold) {
     myIMU.readRegister(&reg, LSM6DS3_ACC_GYRO_WAKE_UP_SRC);
 }
 
-void imuAttachInterrupt() {
-    attachInterrupt(digitalPinToInterrupt(IMU_INT1_PIN), imuInt1Isr, RISING);
+void sensorMotionAttachInterrupt() {
+    attachInterrupt(digitalPinToInterrupt(IMU_INT1_PIN), isrMotionHandler, RISING);
 }
 
-void imuDetachInterrupt() {
+void sensorMotionDetachInterrupt() {
     detachInterrupt(digitalPinToInterrupt(IMU_INT1_PIN));
 }
 
-uint8_t imuClearLatchedInterrupt() {
+uint8_t sensorMotionClearLatch() {
     uint8_t reg;
     myIMU.readRegister(&reg, LSM6DS3_ACC_GYRO_WAKE_UP_SRC);
     return reg;
 }
 
-void imuShutdown() {
+void sensorMotionShutdown() {
     Wire.end();
 }

@@ -82,7 +82,11 @@ f7dac49b63d1,UA-HOVR-001,UA HOVR 跑鞋,hovr_promo.mp4,screen-01
 | 屏幕播放指令 | `screen/screen-01/play` 正确触发 |
 | 超时检测 | 5s 无运动 → timeout 事件 |
 
+## 致谢
+
+ESP32 网关固件基于 [limengdu](https://github.com/limengdu) 的 [Seeed-Homeassistant-Discovery](https://github.com/Seeed-Projects/Seeed-Homeassistant-Discovery) 项目改造。
+
 ## 项目参考
 
-- [Seeed HA Discovery BLE](https://github.com/Seeed-Projects/Seeed-Homeassistant-Discovery)
+- [Seeed HA Discovery BLE](https://github.com/Seeed-Projects/Seeed-Homeassistant-Discovery) — by [limengdu](https://github.com/limengdu)
 - [BTHome 协议](https://bthome.io/)

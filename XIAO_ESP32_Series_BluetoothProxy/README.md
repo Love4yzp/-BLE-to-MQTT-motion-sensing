@@ -308,6 +308,10 @@ mqtt:
 | 4 | 凭据错误 |
 | 5 | 未授权 |
 
+## 致谢
+
+本网关固件基于 [limengdu](https://github.com/limengdu) 的 [Seeed-Homeassistant-Discovery](https://github.com/Seeed-Projects/Seeed-Homeassistant-Discovery) 项目改造，原项目提供了 BTHome BLE 扫描与 Home Assistant MQTT Discovery 的完整实现。
+
 ## 许可证
 
-SeeedHADiscoveryBLE 库的一部分。MIT 许可证。
+基于 SeeedHADiscoveryBLE 库。MIT 许可证。

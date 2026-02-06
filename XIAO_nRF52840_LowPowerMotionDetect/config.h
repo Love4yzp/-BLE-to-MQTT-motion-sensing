@@ -93,7 +93,7 @@
 //
 //   1 = FORCE BATTERY MODE | 强制电池模式
 //       - USB powered but behaves as battery mode
-//       - Use for power measurement with USB ammeter
+//       - Use for power  measurement with USB ammeter
 //       - USB 供电但表现为电池模式（会进入 System OFF）
 //       - 用于 USB 电流表测量低功耗
 //

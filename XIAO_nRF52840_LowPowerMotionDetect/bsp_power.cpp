@@ -1,8 +1,13 @@
 #include <Arduino.h>
 #include "bsp_power.h"
+#include "config.h"
 
 bool bspPowerIsUsb() {
+#if FORCE_BATTERY_MODE
+    return false;
+#else
     return (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk);
+#endif
 }
 
 void bspPowerEnableDCDC() {

@@ -82,7 +82,25 @@
 #define CUSTOM_TX_POWER      4
 
 // =============================================================================
-// 3. DEBUG MODE | 调试模式
+// 3. FORCE BATTERY MODE | 强制电池模式
+// =============================================================================
+//
+//   0 = AUTO DETECT | 自动检测 [DEFAULT]
+//       - USB → USB mode (no sleep, CLI active)
+//       - Battery → Battery mode (sleep enabled)
+//       - USB → USB 模式（不睡眠，CLI 可用）
+//       - 电池 → 电池模式（启用睡眠）
+//
+//   1 = FORCE BATTERY MODE | 强制电池模式
+//       - USB powered but behaves as battery mode
+//       - Use for power measurement with USB ammeter
+//       - USB 供电但表现为电池模式（会进入 System OFF）
+//       - 用于 USB 电流表测量低功耗
+//
+#define FORCE_BATTERY_MODE  0
+
+// =============================================================================
+// 4. DEBUG MODE | 调试模式
 // =============================================================================
 //
 //   0 = PRODUCTION | 生产模式 [DEFAULT]

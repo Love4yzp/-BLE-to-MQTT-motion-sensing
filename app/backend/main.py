@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import paho.mqtt.client as mqtt
 
 from config import settings
@@ -31,6 +31,7 @@ class ProductMapping(BaseModel):
     name: str
     video: str
     screen: str
+    timeout_s: Optional[float] = Field(default=None, ge=0.5, le=300)
 
 
 class MQTTConfig(BaseModel):
@@ -47,6 +48,13 @@ class GatewayInfo(BaseModel):
     last_seen: str = ""
 
 
+class AppConfigUpdate(BaseModel):
+    dedup_window: Optional[float] = Field(default=None, ge=0.1, le=60)
+    sensor_timeout: Optional[float] = Field(default=None, ge=0.5, le=300)
+    sku_poll_ms: Optional[int] = Field(default=None, ge=100, le=10000)
+    status_poll_ms: Optional[int] = Field(default=None, ge=500, le=60000)
+
+
 # ============================================
 # 全局状态
 # ============================================
@@ -55,9 +63,16 @@ gateways: dict[str, GatewayInfo] = {}
 recent_triggers: dict[str, float] = {}
 sensor_states: dict[str, bool] = {}
 sensor_last_seen: dict[str, float] = {}
+sensor_meta: dict[str, dict] = {}
 event_log: list[dict] = []
 mqtt_client: Optional[mqtt.Client] = None
 mqtt_connected = False
+ui_runtime_config = {
+    "sku_poll_ms": 500,
+    "status_poll_ms": 5000,
+}
+DEFAULT_VIDEO_FILE = "demo_default.mp4"
+DEFAULT_SCREEN_ID = "screen-01"
 
 
 # ============================================
@@ -75,12 +90,17 @@ def load_product_map():
         reader = csv.DictReader(f)
         for row in reader:
             mac = row["mac"].lower().replace(":", "")
+            timeout_raw = (row.get("timeout_s") or "").strip()
+            timeout_s = float(timeout_raw) if timeout_raw else None
+            video = (row.get("video") or "").strip() or DEFAULT_VIDEO_FILE
+            screen = (row.get("screen") or "").strip() or DEFAULT_SCREEN_ID
             product_map[mac] = ProductMapping(
                 mac=mac,
                 sku=row["sku"],
                 name=row["name"],
-                video=row["video"],
-                screen=row["screen"],
+                video=video,
+                screen=screen,
+                timeout_s=timeout_s,
             )
     print(f"[映射表] 已加载 {len(product_map)} 个产品")
 
@@ -90,10 +110,22 @@ def save_product_map():
     settings.data_dir.mkdir(exist_ok=True)
 
     with open(settings.product_map_file, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["mac", "sku", "name", "video", "screen"])
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["mac", "sku", "name", "video", "screen", "timeout_s"],
+        )
         writer.writeheader()
         for p in product_map.values():
-            writer.writerow(p.model_dump())
+            writer.writerow(
+                {
+                    "mac": p.mac,
+                    "sku": p.sku,
+                    "name": p.name,
+                    "video": p.video,
+                    "screen": p.screen,
+                    "timeout_s": "" if p.timeout_s is None else p.timeout_s,
+                }
+            )
     print(f"[映射表] 已保存 {len(product_map)} 个产品")
 
 
@@ -121,6 +153,53 @@ def save_gateways():
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+def get_app_config() -> dict:
+    return {
+        "dedup_window": settings.dedup_window,
+        "sensor_timeout": settings.sensor_timeout,
+        "sku_poll_ms": ui_runtime_config["sku_poll_ms"],
+        "status_poll_ms": ui_runtime_config["status_poll_ms"],
+    }
+
+
+def load_app_config():
+    """加载运行时配置（覆盖默认设置）"""
+    config_file = settings.data_dir / "app_config.json"
+    if not config_file.exists():
+        return
+
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        dedup_window = data.get("dedup_window")
+        sensor_timeout = data.get("sensor_timeout")
+        sku_poll_ms = data.get("sku_poll_ms")
+        status_poll_ms = data.get("status_poll_ms")
+
+        if isinstance(dedup_window, (int, float)) and dedup_window >= 0.1:
+            settings.dedup_window = float(dedup_window)
+        if isinstance(sensor_timeout, (int, float)) and sensor_timeout >= 0.5:
+            settings.sensor_timeout = float(sensor_timeout)
+        if isinstance(sku_poll_ms, int) and sku_poll_ms >= 100:
+            ui_runtime_config["sku_poll_ms"] = sku_poll_ms
+        if isinstance(status_poll_ms, int) and status_poll_ms >= 500:
+            ui_runtime_config["status_poll_ms"] = status_poll_ms
+
+        print("[配置] 已加载运行时配置")
+    except Exception as e:
+        print(f"[配置] 加载失败: {e}")
+
+
+def save_app_config():
+    """保存运行时配置"""
+    settings.data_dir.mkdir(exist_ok=True)
+    config_file = settings.data_dir / "app_config.json"
+
+    with open(config_file, "w", encoding="utf-8") as f:
+        json.dump(get_app_config(), f, indent=2, ensure_ascii=False)
+
+
 def add_event(event_type: str, mac: str, details: dict):
     """添加事件日志"""
     event = {
@@ -133,6 +212,11 @@ def add_event(event_type: str, mac: str, details: dict):
     # 只保留最近 100 条
     if len(event_log) > 100:
         event_log.pop()
+
+
+def apply_demo_defaults(product: ProductMapping):
+    product.video = (product.video or "").strip() or DEFAULT_VIDEO_FILE
+    product.screen = (product.screen or "").strip() or DEFAULT_SCREEN_ID
 
 
 # ============================================
@@ -180,6 +264,13 @@ def handle_sensor_event(topic: str, payload: dict):
     motion = payload.get("motion", False)
     rssi = payload.get("rssi", 0)
     gateway_id = payload.get("gateway_id", "unknown")
+
+    sensor_meta[mac] = {
+        "gateway_id": gateway_id,
+        "rssi": rssi,
+        "motion": motion,
+        "updated_at": time.time(),
+    }
 
     if motion:
         sensor_last_seen[mac] = time.time()
@@ -297,10 +388,15 @@ def start_sensor_timeout_checker():
             time.sleep(1)
             now = time.time()
             for mac, last_seen in list(sensor_last_seen.items()):
-                if now - last_seen > settings.sensor_timeout:
+                product = product_map.get(mac)
+                timeout_s = (
+                    product.timeout_s
+                    if product and product.timeout_s is not None
+                    else settings.sensor_timeout
+                )
+                if now - last_seen > timeout_s:
                     if sensor_states.get(mac):
                         sensor_states[mac] = False
-                        product = product_map.get(mac)
                         sku = product.sku if product else ""
                         name = product.name if product else ""
                         add_event("timeout", mac, {"sku": sku, "name": name})
@@ -318,6 +414,7 @@ async def lifespan(app: FastAPI):
     load_product_map()
     load_gateways()
     load_translations()
+    load_app_config()
     start_mqtt()
     start_sensor_timeout_checker()
     yield
@@ -361,6 +458,7 @@ async def get_products():
 async def add_product(product: ProductMapping):
     mac = product.mac.lower().replace(":", "")
     product.mac = mac
+    apply_demo_defaults(product)
     product_map[mac] = product
     save_product_map()
     return {"status": "ok", "product": product}
@@ -372,6 +470,7 @@ async def update_product(mac: str, product: ProductMapping):
     if mac not in product_map:
         raise HTTPException(status_code=404, detail="Product not found")
     product.mac = mac
+    apply_demo_defaults(product)
     product_map[mac] = product
     save_product_map()
     return {"status": "ok", "product": product}
@@ -428,15 +527,49 @@ async def get_sku_states():
     states = []
     for mac, motion in sensor_states.items():
         product = product_map.get(mac)
+        last_seen = sensor_last_seen.get(mac)
         states.append(
             {
                 "mac": mac,
                 "sku": product.sku if product else "",
                 "name": product.name if product else "",
                 "active": motion,
+                "last_seen": last_seen,
+                "timeout_s": (
+                    product.timeout_s
+                    if product and product.timeout_s is not None
+                    else settings.sensor_timeout
+                ),
+                "gateway_id": sensor_meta.get(mac, {}).get("gateway_id", "unknown"),
+                "rssi": sensor_meta.get(mac, {}).get("rssi", 0),
             }
         )
     return states
+
+
+@app.get("/api/sensors/unmapped")
+async def get_unmapped_sensors(limit: int = 50):
+    sensors = []
+    all_macs = set(sensor_meta.keys()) | set(sensor_states.keys())
+
+    for mac in all_macs:
+        if mac in product_map:
+            continue
+
+        meta = sensor_meta.get(mac, {})
+        last_seen = sensor_last_seen.get(mac, meta.get("updated_at"))
+        sensors.append(
+            {
+                "mac": mac,
+                "active": sensor_states.get(mac, False),
+                "last_seen": last_seen,
+                "gateway_id": meta.get("gateway_id", "unknown"),
+                "rssi": meta.get("rssi", 0),
+            }
+        )
+
+    sensors.sort(key=lambda x: x.get("last_seen") or 0, reverse=True)
+    return sensors[:limit]
 
 
 # ============================================
@@ -449,6 +582,34 @@ async def get_mqtt_status():
         "broker": settings.mqtt_broker,
         "port": settings.mqtt_port,
     }
+
+
+@app.get("/api/config")
+async def get_config():
+    return get_app_config()
+
+
+@app.patch("/api/config")
+async def patch_config(update: AppConfigUpdate):
+    changed = False
+
+    if update.dedup_window is not None:
+        settings.dedup_window = update.dedup_window
+        changed = True
+    if update.sensor_timeout is not None:
+        settings.sensor_timeout = update.sensor_timeout
+        changed = True
+    if update.sku_poll_ms is not None:
+        ui_runtime_config["sku_poll_ms"] = update.sku_poll_ms
+        changed = True
+    if update.status_poll_ms is not None:
+        ui_runtime_config["status_poll_ms"] = update.status_poll_ms
+        changed = True
+
+    if changed:
+        save_app_config()
+
+    return {"status": "ok", "config": get_app_config()}
 
 
 # ============================================

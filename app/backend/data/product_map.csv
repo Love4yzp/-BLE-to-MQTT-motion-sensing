@@ -1,2 +1,2 @@
-mac,sku,name,video,screen
-f7dac49b63d1,UA-HOVR-001,UA HOVR 跑鞋,hovr_promo.mp4,screen-01
+mac,sku,name,video,screen,timeout_s
+f7dac49b63d1,SKU-63D1,快乐鞋子,hello.mp4,screen-01,5.0

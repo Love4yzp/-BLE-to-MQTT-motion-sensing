@@ -1,16 +1,21 @@
 {
   "app": {
-    "title": "SeeedUA Smart Retail Management",
-    "brand": "SeeedUA Smart Retail Management"
+    "title": "SeeedUA Smart Retail",
+    "brand": "SeeedUA Smart Retail"
   },
   "nav": {
     "mqtt": "MQTT",
     "connected": "Connected",
     "disconnected": "Disconnected"
   },
+  "stats": {
+    "active_sensors": "Active Pickups",
+    "gateways_online": "Gateways Online",
+    "total_events": "Events (Log)"
+  },
   "product": {
     "title": "Product Mapping",
-    "add": "+ Add Product",
+    "add": "Add Product",
     "mac": "MAC Address",
     "sku": "SKU",
     "name": "Product Name",
@@ -30,25 +35,60 @@
     "screenPlaceholder": "screen-01",
     "videoFile": "Video File",
     "targetScreen": "Target Screen",
+    "videoDefaultHint": "Optional for demo, blank uses default video",
+    "screenDefaultHint": "Optional for demo, blank uses default screen",
+    "timeout": "Timeout (s)",
+    "timeoutGlobal": "Global",
+    "timeoutPlaceholder": "Leave empty for global",
+    "timeoutHint": "Fallback to global sensor timeout when empty",
+    "suggestedSkuHint": "SKU is auto-suggested from sensor MAC suffix",
+    "suggestedNameHint": "Temporary name generated, edit to product name",
     "cancel": "Cancel",
     "save": "Save",
     "saveFailed": "Save failed",
     "confirmDelete": "Are you sure to delete this product?"
   },
   "gateway": {
-    "title": "Gateway Management",
-    "blink": "Blink",
+    "title": "Gateways",
+    "blink": "Identify",
     "labelPlaceholder": "Enter location label, e.g.: Shelf A",
     "lastSeen": "Last seen",
     "empty": "No gateways",
     "emptyHint": "Gateways will appear when online"
   },
   "sku": {
-    "title": "SKU Status",
-    "realtime": "Real-time update",
+    "title": "Live SKU Status",
+    "realtime": "Real-time sensor updates",
     "pickedUp": "Picked Up",
     "putDown": "Put Down",
-    "empty": "No sensor data"
+    "empty": "No sensor data",
+    "activeLabel": "PICKED UP",
+    "idleLabel": "PUT DOWN",
+    "autoResetPrefix": "Auto reset in",
+    "idleHint": "Waiting for new motion updates",
+    "countdownBar": "Timeout Progress"
+  },
+  "config": {
+    "title": "Runtime Config",
+    "live": "Live",
+    "hint": "If no new motion update arrives before timeout, the system auto marks the product as put down.",
+    "sensorTimeout": "Sensor timeout (s)",
+    "dedupWindow": "Dedup window (s)",
+    "skuPoll": "SKU poll (ms)",
+    "statusPoll": "Status poll (ms)",
+    "save": "Apply Config",
+    "saving": "Saving...",
+    "saveFailed": "Failed to save config"
+  },
+  "unmapped": {
+    "title": "Unmapped Sensors",
+    "hint": "ESP32 is a transparent gateway. Use sensor MAC for mapping (not gateway ID).",
+    "mapNow": "Map Now",
+    "empty": "No unmapped sensors"
+  },
+  "events": {
+    "title": "Event Log",
+    "empty": "No recent events"
   },
   "lang": {
     "zh": "中文",

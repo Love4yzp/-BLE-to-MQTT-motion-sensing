@@ -1,16 +1,21 @@
 {
   "app": {
     "title": "SeeedUA 智慧零售管理",
-    "brand": "SeeedUA 智慧零售管理"
+    "brand": "SeeedUA 智慧零售"
   },
   "nav": {
     "mqtt": "MQTT",
     "connected": "已连接",
     "disconnected": "未连接"
   },
+  "stats": {
+    "active_sensors": "活跃拾取",
+    "gateways_online": "网关在线",
+    "total_events": "事件日志"
+  },
   "product": {
     "title": "产品映射表",
-    "add": "+ 添加产品",
+    "add": "添加产品",
     "mac": "MAC 地址",
     "sku": "SKU",
     "name": "产品名称",
@@ -30,6 +35,14 @@
     "screenPlaceholder": "screen-01",
     "videoFile": "视频文件",
     "targetScreen": "目标屏幕",
+    "videoDefaultHint": "Demo 可留空，将使用默认视频文件",
+    "screenDefaultHint": "Demo 可留空，将使用默认屏幕",
+    "timeout": "超时阈值 (秒)",
+    "timeoutGlobal": "跟随全局",
+    "timeoutPlaceholder": "留空使用全局",
+    "timeoutHint": "为空时回退到全局传感器超时",
+    "suggestedSkuHint": "已根据传感器 MAC 后缀自动建议 SKU",
+    "suggestedNameHint": "已生成临时名称，可按商品名修改",
     "cancel": "取消",
     "save": "保存",
     "saveFailed": "保存失败",
@@ -37,18 +50,45 @@
   },
   "gateway": {
     "title": "网关管理",
-    "blink": "闪烁",
+    "blink": "闪烁定位",
     "labelPlaceholder": "输入位置标签，如：货架A",
     "lastSeen": "最后在线",
     "empty": "暂无网关",
     "emptyHint": "网关上线后自动显示"
   },
   "sku": {
-    "title": "SKU 状态",
-    "realtime": "实时更新",
-    "pickedUp": "提起",
-    "putDown": "放下",
-    "empty": "暂无传感器数据"
+    "title": "实时 SKU 状态",
+    "realtime": "传感器实时更新",
+    "pickedUp": "已拾取",
+    "putDown": "已放下",
+    "empty": "暂无传感器数据",
+    "activeLabel": "已拾取",
+    "idleLabel": "已放下",
+    "autoResetPrefix": "自动复位倒计时",
+    "idleHint": "等待新的动作更新",
+    "countdownBar": "超时进度"
+  },
+  "config": {
+    "title": "运行参数",
+    "live": "实时",
+    "hint": "如果在超时时间内没有新的动作上报，系统会自动判定为放下。",
+    "sensorTimeout": "传感器超时 (秒)",
+    "dedupWindow": "去重窗口 (秒)",
+    "skuPoll": "SKU 刷新 (毫秒)",
+    "statusPoll": "状态刷新 (毫秒)",
+    "save": "应用配置",
+    "saving": "保存中...",
+    "saveFailed": "配置保存失败"
+  },
+  "unmapped": {
+    "title": "未映射传感器",
+    "hint": "ESP32 是透明网关，请按传感器 MAC 做映射（不是网关 ID）。",
+    "mapNow": "立即映射",
+    "empty": "暂无未映射传感器"
+  },
+  "events": {
+    "title": "事件日志",
+    "empty": "暂无事件"
   },
   "lang": {
     "zh": "中文",

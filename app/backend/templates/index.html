@@ -1,279 +1,769 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SeeedUA</title>
+    <title>SeeedUA Smart Retail Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    colors: {
+                        seeed: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#0FAE3C',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-        .status-online { background: #22c55e; }
-        .status-offline { background: #ef4444; }
-        .event-play { background: #dcfce7; }
-        .event-picked_up { background: #3b82f6; color: white; }
-        .event-put_down { background: #9ca3af; color: white; }
-        .event-gateway { background: #e0e7ff; }
-        .event-unknown { background: #fef3c7; }
         [v-cloak] { display: none; }
+        
+        /* Animations */
+        .sku-card { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .sku-card.active { 
+            transform: scale(1.02); 
+            box-shadow: 0 20px 25px -5px rgba(15, 174, 60, 0.15), 0 10px 10px -5px rgba(15, 174, 60, 0.1); 
+            border-color: #0FAE3C; 
+            background-color: #f0fdf4;
+        }
+        
+        .list-enter-active,
+        .list-leave-active {
+            transition: all 0.5s ease;
+        }
+        .list-enter-from,
+        .list-leave-to {
+            opacity: 0;
+            transform: translateX(20px);
+        }
+
+        .fade-enter-active,
+        .fade-leave-active {
+            transition: opacity 0.3s ease;
+        }
+        .fade-enter-from,
+        .fade-leave-to {
+            opacity: 0;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-<div id="app" v-cloak>
-    <nav class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 py-4">
-            <div class="flex justify-between items-center">
-                <h1 class="text-xl font-bold text-gray-800">${ i18n.app?.brand }</h1>
-                <div class="flex items-center gap-4">
-                    <select v-model="lang" @change="changeLang" class="text-sm border rounded px-2 py-1">
-                        <option value="zh">${ i18n.lang?.zh }</option>
-                        <option value="en">${ i18n.lang?.en }</option>
-                    </select>
-                    <span class="text-sm text-gray-500">${ i18n.nav?.mqtt }: ${mqttStatus.broker}</span>
-                    <span class="status-dot" :class="mqttStatus.connected ? 'status-online' : 'status-offline'"></span>
-                    <span class="text-sm" :class="mqttStatus.connected ? 'text-green-600' : 'text-red-600'">
-                        ${ mqttStatus.connected ? i18n.nav?.connected : i18n.nav?.disconnected }
-                    </span>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+    <div id="app" v-cloak class="flex-1 flex flex-col">
+        
+        <!-- Top Navigation & Stats -->
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <!-- Brand -->
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 bg-seeed-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">S</div>
+                        <h1 class="text-xl font-bold tracking-tight text-slate-900">${ i18n.app?.brand || 'SeeedUA' }</h1>
+                    </div>
+
+                    <!-- Stats Bar (Desktop) -->
+                    <div class="hidden md:flex items-center gap-8 text-sm">
+                        <div class="flex flex-col items-center">
+                            <span class="text-slate-400 text-xs font-medium uppercase tracking-wider">${ i18n.stats?.active_sensors || 'Active Pickups' }</span>
+                            <span class="font-bold text-lg text-seeed-600">${ activePickups }</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-slate-400 text-xs font-medium uppercase tracking-wider">${ i18n.stats?.gateways_online || 'Gateways Online' }</span>
+                            <span class="font-bold text-lg" :class="onlineGatewaysCount > 0 ? 'text-slate-700' : 'text-red-500'">${ onlineGatewaysCount }/${ gateways.length }</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-slate-400 text-xs font-medium uppercase tracking-wider">${ i18n.stats?.total_events || 'Events (Log)' }</span>
+                            <span class="font-bold text-lg text-slate-700">${ events.length }</span>
+                        </div>
+                    </div>
+
+                    <!-- Right Controls -->
+                    <div class="flex items-center gap-4">
+                        <!-- MQTT Status -->
+                        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-full border border-slate-200">
+                            <div class="w-2 h-2 rounded-full" :class="mqttStatus.connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'"></div>
+                            <div class="flex flex-col leading-none">
+                                <span class="text-[10px] text-slate-400 font-bold">MQTT</span>
+                                <span class="text-xs font-medium" :class="mqttStatus.connected ? 'text-green-700' : 'text-red-600'">
+                                    ${ mqttStatus.connected ? (i18n.nav?.connected || 'Connected') : (i18n.nav?.disconnected || 'Disconnected') }
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Lang Switcher -->
+                        <select v-model="lang" @change="changeLang" class="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-seeed-500 focus:border-seeed-500 block p-2">
+                            <option value="zh">${ i18n.lang?.zh || '中文' }</option>
+                            <option value="en">${ i18n.lang?.en || 'English' }</option>
+                        </select>
+                    </div>
                 </div>
             </div>
-        </div>
-    </nav>
+        </header>
 
-    <div class="max-w-7xl mx-auto px-4 py-6">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            <div class="lg:col-span-2 bg-white rounded-lg shadow p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-semibold">${ i18n.product?.title }</h2>
-                    <button @click="showAddProduct" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                        ${ i18n.product?.add }
-                    </button>
-                </div>
+        <!-- Main Content -->
+        <main class="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
                 
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-2 text-left">${ i18n.product?.mac }</th>
-                                <th class="px-4 py-2 text-left">${ i18n.product?.sku }</th>
-                                <th class="px-4 py-2 text-left">${ i18n.product?.name }</th>
-                                <th class="px-4 py-2 text-left">${ i18n.product?.video }</th>
-                                <th class="px-4 py-2 text-left">${ i18n.product?.screen }</th>
-                                <th class="px-4 py-2 text-left">${ i18n.product?.actions }</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="p in products" :key="p.mac" class="border-t hover:bg-gray-50">
-                                <td class="px-4 py-2 font-mono text-xs">${ p.mac }</td>
-                                <td class="px-4 py-2">${ p.sku }</td>
-                                <td class="px-4 py-2">${ p.name }</td>
-                                <td class="px-4 py-2 text-xs">${ p.video }</td>
-                                <td class="px-4 py-2">${ p.screen }</td>
-                                <td class="px-4 py-2">
-                                    <button @click="editProduct(p)" class="text-blue-500 hover:underline">${ i18n.product?.edit }</button>
-                                    <button @click="deleteProduct(p.mac)" class="text-red-500 hover:underline ml-2">${ i18n.product?.delete }</button>
-                                </td>
-                            </tr>
-                            <tr v-if="products.length === 0">
-                                <td colspan="6" class="px-4 py-8 text-center text-gray-400">${ i18n.product?.empty }</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-lg font-semibold mb-4">${ i18n.gateway?.title }</h2>
-                <div class="space-y-3">
-                    <div v-for="gw in gateways" :key="gw.gateway_id" class="border rounded p-3 hover:bg-gray-50">
-                        <div class="flex justify-between items-start">
+                <!-- Left Column: Hero & Products (2/3) -->
+                <div class="lg:col-span-2 flex flex-col gap-8">
+                    
+                    <!-- Hero SKU Section -->
+                    <section>
+                        <div class="flex justify-between items-end mb-4">
                             <div>
-                                <div class="font-mono text-sm font-medium">${ gw.gateway_id }</div>
-                                <div class="text-xs text-gray-500 mt-1">
-                                    ${ gw.board }<br>
-                                    IP: ${ gw.ip }<br>
-                                    MAC: ${ gw.mac }
+                                <h2 class="text-2xl font-bold text-slate-900">${ i18n.sku?.title || 'Live SKU Status' }</h2>
+                                <p class="text-slate-500 text-sm mt-1">${ i18n.sku?.realtime || 'Real-time sensor updates' }</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    ${ i18n.sku?.pickedUp || 'Picked Up' }
+                                </span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                                    ${ i18n.sku?.putDown || 'Put Down' }
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                            <div v-for="s in skuStates" :key="s.mac" 
+                                 class="sku-card relative group bg-white rounded-xl border-2 border-transparent p-5 shadow-sm hover:shadow-md flex flex-col justify-between min-h-[140px]"
+                                 :class="{ 'active border-seeed-500 ring-2 ring-seeed-100': s.active }">
+                                
+                                <div class="flex justify-between items-start">
+                                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                                         :class="s.active ? 'bg-seeed-100 text-seeed-600' : 'bg-slate-100 text-slate-400'">
+                                        <span v-if="s.active">⚡</span>
+                                        <span v-else>📦</span>
+                                    </div>
+                                    <span class="text-[10px] font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                        ${ s.mac.slice(-4) }
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <h3 class="font-bold text-lg leading-tight mb-1" :class="s.active ? 'text-seeed-700' : 'text-slate-700'">
+                                        ${ s.sku || 'Unknown SKU' }
+                                    </h3>
+                                    <p class="text-xs text-slate-500 truncate">${ s.name || 'No Name' }</p>
+                                    <p class="text-[11px] mt-2 font-semibold" :class="s.active ? 'text-seeed-700' : 'text-slate-500'">
+                                        ${ s.active ? (i18n.sku?.activeLabel || 'PICKED UP') : (i18n.sku?.idleLabel || 'PUT DOWN') }
+                                    </p>
+                                    <p class="text-[10px] text-slate-400 mt-1">
+                                        ${ s.active ? (i18n.sku?.autoResetPrefix || 'Auto reset in') + ' ' + formatCountdownSeconds(s) + 's' : (i18n.sku?.idleHint || 'No motion updates') }
+                                    </p>
+
+                                    <div class="mt-3">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="text-[10px] font-semibold" :class="s.active ? 'text-seeed-700' : 'text-slate-400'">
+                                                ${ i18n.sku?.countdownBar || 'Timeout Progress' }
+                                            </span>
+                                            <span class="text-[10px] font-mono" :class="s.active ? 'text-seeed-700' : 'text-slate-400'">
+                                                ${ skuCountdownPercent(s) }%
+                                            </span>
+                                        </div>
+                                        <div class="h-2.5 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                                            <div
+                                                class="h-full transition-all duration-100"
+                                                :class="s.active ? 'bg-gradient-to-r from-seeed-600 to-emerald-400' : 'bg-slate-300'"
+                                                :style="{ width: (s.active ? skuCountdownPercent(s) : 0) + '%' }"
+                                            ></div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <button @click="identifyGateway(gw.gateway_id)" 
-                                    class="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200">
-                                ${ i18n.gateway?.blink }
+                            
+                            <!-- Empty State -->
+                            <div v-if="skuStates.length === 0" class="col-span-full bg-white rounded-xl border border-dashed border-slate-300 p-8 text-center">
+                                <p class="text-slate-400">${ i18n.sku?.empty || 'No sensors connected' }</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Product Mapping Table -->
+                    <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1">
+                        <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <h3 class="font-bold text-slate-800">${ i18n.product?.title || 'Product Mapping' }</h3>
+                            <button @click="showAddProduct" class="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                ${ i18n.product?.add || 'Add Product' }
                             </button>
                         </div>
-                        <div class="mt-2">
-                            <input type="text" 
-                                   v-model="gw.label" 
-                                   @change="updateGatewayLabel(gw.gateway_id, gw.label)"
-                                   :placeholder="i18n.gateway?.labelPlaceholder"
-                                   class="w-full text-sm border rounded px-2 py-1">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
+                                    <tr>
+                                        <th class="px-6 py-3 font-semibold">${ i18n.product?.sku || 'SKU' }</th>
+                                        <th class="px-6 py-3 font-semibold">${ i18n.product?.name || 'Name' }</th>
+                                        <th class="px-6 py-3 font-semibold">${ i18n.product?.mac || 'MAC' }</th>
+                                        <th class="px-6 py-3 font-semibold">${ i18n.product?.video || 'Video' }</th>
+                                        <th class="px-6 py-3 font-semibold">${ i18n.product?.screen || 'Screen' }</th>
+                                        <th class="px-6 py-3 font-semibold">${ i18n.product?.timeout || 'Timeout (s)' }</th>
+                                        <th class="px-6 py-3 font-semibold text-right">${ i18n.product?.actions || 'Actions' }</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <tr v-for="p in products" :key="p.mac" class="hover:bg-slate-50/80 transition-colors group">
+                                        <td class="px-6 py-4 font-medium text-slate-900">${ p.sku }</td>
+                                        <td class="px-6 py-4 text-slate-600">${ p.name }</td>
+                                        <td class="px-6 py-4 font-mono text-xs text-slate-500">${ p.mac }</td>
+                                        <td class="px-6 py-4 text-slate-500 truncate max-w-[150px]">${ p.video }</td>
+                                        <td class="px-6 py-4 text-slate-500">${ p.screen }</td>
+                                        <td class="px-6 py-4 text-slate-500">${ p.timeout_s == null ? (i18n.product?.timeoutGlobal || 'Global') : p.timeout_s }</td>
+                                        <td class="px-6 py-4 text-right">
+                                            <div class="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button @click="editProduct(p)" class="text-blue-600 hover:text-blue-800 font-medium">${ i18n.product?.edit || 'Edit' }</button>
+                                                <button @click="deleteProduct(p.mac)" class="text-red-500 hover:text-red-700 font-medium">${ i18n.product?.delete || 'Delete' }</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="products.length === 0">
+                                        <td colspan="7" class="px-6 py-12 text-center text-slate-400">
+                                            ${ i18n.product?.empty || 'No products mapped' }
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="text-xs text-gray-400 mt-1">${ i18n.gateway?.lastSeen }: ${ gw.last_seen }</div>
-                    </div>
-                    <div v-if="gateways.length === 0" class="text-center text-gray-400 py-8">
-                        ${ i18n.gateway?.empty }<br><span class="text-xs">${ i18n.gateway?.emptyHint }</span>
-                    </div>
+                    </section>
+                </div>
+
+                <!-- Right Column: Sidebar (1/3) -->
+                <div class="space-y-8">
+
+                    <!-- Unmapped Sensors -->
+                    <section class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-bold text-slate-800 text-sm">${ i18n.unmapped?.title || 'Unmapped Sensors' }</h3>
+                            <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">${ unmappedSensors.length }</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-3">${ i18n.unmapped?.hint || 'ESP32 is a transparent gateway. Map by sensor MAC (not gateway ID).' }</p>
+                        <div class="space-y-2 max-h-52 overflow-y-auto custom-scroll">
+                            <div v-for="u in unmappedSensors" :key="u.mac" class="rounded-lg border border-slate-200 p-3">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="font-mono text-xs text-slate-700">${ u.mac }</span>
+                                    <button @click="showAddProduct(u.mac)" class="text-xs px-2 py-1 rounded bg-seeed-50 text-seeed-700 border border-seeed-200 hover:bg-seeed-100">
+                                        ${ i18n.unmapped?.mapNow || 'Map Now' }
+                                    </button>
+                                </div>
+                                <div class="mt-1 text-[10px] text-slate-500">
+                                    GW: ${ u.gateway_id || 'unknown' } | RSSI: ${ u.rssi } | ${ formatTime(u.last_seen ? u.last_seen * 1000 : '') }
+                                </div>
+                            </div>
+                            <div v-if="unmappedSensors.length === 0" class="text-xs text-slate-400 py-2">
+                                ${ i18n.unmapped?.empty || 'No unmapped sensors' }
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Runtime Config -->
+                    <section class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-bold text-slate-800 text-sm">${ i18n.config?.title || 'Runtime Config' }</h3>
+                            <span class="text-[10px] px-2 py-0.5 rounded-full bg-seeed-50 text-seeed-700 border border-seeed-200">${ i18n.config?.live || 'Live' }</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-4">${ i18n.config?.hint || 'If no motion update arrives before timeout, system auto marks product as put down.' }</p>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600">${ i18n.config?.sensorTimeout || 'Sensor timeout (s)' }</label>
+                                <input v-model.number="appConfigDraft.sensor_timeout" type="number" min="1" step="0.5"
+                                       class="mt-1 w-full rounded-lg border-slate-200 text-sm focus:border-seeed-500 focus:ring-seeed-500">
+                            </div>
+                            <div>
+                                <label class="text-[11px] font-semibold text-slate-600">${ i18n.config?.dedupWindow || 'Dedup window (s)' }</label>
+                                <input v-model.number="appConfigDraft.dedup_window" type="number" min="0.1" step="0.1"
+                                       class="mt-1 w-full rounded-lg border-slate-200 text-sm focus:border-seeed-500 focus:ring-seeed-500">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-[11px] font-semibold text-slate-600">${ i18n.config?.skuPoll || 'SKU poll (ms)' }</label>
+                                    <input v-model.number="appConfigDraft.sku_poll_ms" type="number" min="100" step="100"
+                                           class="mt-1 w-full rounded-lg border-slate-200 text-sm focus:border-seeed-500 focus:ring-seeed-500">
+                                </div>
+                                <div>
+                                    <label class="text-[11px] font-semibold text-slate-600">${ i18n.config?.statusPoll || 'Status poll (ms)' }</label>
+                                    <input v-model.number="appConfigDraft.status_poll_ms" type="number" min="500" step="500"
+                                           class="mt-1 w-full rounded-lg border-slate-200 text-sm focus:border-seeed-500 focus:ring-seeed-500">
+                                </div>
+                            </div>
+                            <button @click="saveConfig" :disabled="configSaving"
+                                    class="w-full text-sm font-medium text-white bg-seeed-600 hover:bg-seeed-700 disabled:opacity-60 rounded-lg py-2 transition-colors">
+                                ${ configSaving ? (i18n.config?.saving || 'Saving...') : (i18n.config?.save || 'Apply Config') }
+                            </button>
+                        </div>
+                    </section>
+                    
+                    <!-- Gateways -->
+                    <section>
+                        <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            ${ i18n.gateway?.title || 'Gateways' }
+                            <span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">${ gateways.length }</span>
+                        </h3>
+                        <div class="space-y-3">
+                            <div v-for="gw in gateways" :key="gw.gateway_id" 
+                                 class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-2 h-2 rounded-full" :class="isGatewayOnline(gw.last_seen) ? 'bg-green-500' : 'bg-slate-300'"></div>
+                                        <span class="font-mono text-xs font-bold text-slate-700">${ gw.gateway_id }</span>
+                                    </div>
+                                    <span class="text-[10px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 border border-slate-200">${ gw.board }</span>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <input type="text" v-model="gw.label" @change="updateGatewayLabel(gw.gateway_id, gw.label)"
+                                           :placeholder="i18n.gateway?.labelPlaceholder || 'Label'"
+                                           class="w-full text-sm border-0 border-b border-slate-200 focus:border-seeed-500 focus:ring-0 px-0 py-1 bg-transparent placeholder-slate-400 transition-colors">
+                                </div>
+
+                                <div class="flex justify-between items-end">
+                                    <div class="text-xs text-slate-400">
+                                        <div>${ gw.ip }</div>
+                                        <div class="mt-0.5 text-[10px]">${ formatTime(gw.last_seen) }</div>
+                                    </div>
+                                    <button @click="identifyGateway(gw.gateway_id)" 
+                                            class="text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 px-2 py-1 rounded hover:bg-yellow-100 transition-colors">
+                                        ${ i18n.gateway?.blink || 'Identify' }
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div v-if="gateways.length === 0" class="text-center py-8 bg-white rounded-xl border border-dashed border-slate-300">
+                                <p class="text-slate-400 text-sm">${ i18n.gateway?.empty || 'No gateways found' }</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Event Log -->
+                    <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col max-h-[600px]">
+                        <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+                            <h3 class="font-bold text-slate-800 text-sm">${ i18n.events?.title || 'Event Log' }</h3>
+                        </div>
+                        <div class="overflow-y-auto custom-scroll p-4">
+                            <transition-group name="list" tag="div" class="space-y-4">
+                                <div v-for="(e, i) in events" :key="e.time + i" class="relative pl-4 border-l-2"
+                                     :class="{
+                                        'border-blue-500': e.type === 'picked_up',
+                                        'border-slate-300': e.type === 'put_down',
+                                        'border-green-500': e.type === 'play',
+                                        'border-purple-400': e.type === 'gateway',
+                                        'border-yellow-400': e.type === 'unknown',
+                                        'border-orange-400': e.type === 'timeout'
+                                     }">
+                                    <div class="flex justify-between items-start">
+                                        <span class="text-xs font-bold uppercase tracking-wider" 
+                                              :class="{
+                                                'text-blue-600': e.type === 'picked_up',
+                                                'text-slate-500': e.type === 'put_down',
+                                                'text-green-600': e.type === 'play',
+                                                'text-purple-600': e.type === 'gateway',
+                                                'text-yellow-600': e.type === 'unknown',
+                                                'text-orange-600': e.type === 'timeout'
+                                              }">
+                                            ${ e.type.replace('_', ' ') }
+                                        </span>
+                                        <span class="text-[10px] text-slate-400 font-mono">${ formatTime(e.time) }</span>
+                                    </div>
+                                    <div class="mt-1 text-sm text-slate-700">
+                                        <span v-if="e.sku" class="font-medium">${ e.sku }</span>
+                                        <span v-else-if="e.mac" class="font-mono text-xs text-slate-500">${ e.mac }</span>
+                                        <span class="text-slate-500 text-xs block mt-0.5">
+                                            ${ e.mac ? ('MAC: ' + e.mac) : '' }
+                                            ${ e.gateway_id ? (' | GW: ' + e.gateway_id) : '' }
+                                            ${ (e.rssi !== undefined && e.rssi !== null) ? (' | RSSI: ' + e.rssi) : '' }
+                                        </span>
+                                    </div>
+                                </div>
+                            </transition-group>
+                            <div v-if="events.length === 0" class="text-center text-slate-400 text-sm py-4">
+                                ${ i18n.events?.empty || 'No recent events' }
+                            </div>
+                        </div>
+                    </section>
+
                 </div>
             </div>
+        </main>
 
-            <div class="lg:col-span-3 bg-white rounded-lg shadow p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-semibold">${ i18n.sku?.title }</h2>
-                    <span class="text-xs text-gray-400">${ i18n.sku?.realtime }</span>
-                </div>
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    <div v-for="s in skuStates" :key="s.mac" 
-                         class="rounded-xl p-4 min-h-[90px] flex flex-col justify-center items-center text-center transition-all"
-                         :class="s.active ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-600'">
-                        <div class="font-bold text-lg">${ s.sku || s.mac }</div>
-                        <div class="text-xs mt-1 opacity-75">${ s.name }</div>
-                        <div class="text-xs mt-2 font-medium">${ s.active ? i18n.sku?.pickedUp : i18n.sku?.putDown }</div>
+        <!-- Modal -->
+        <transition name="fade">
+            <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" @click="modal.show = false"></div>
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative z-10 overflow-hidden transform transition-all">
+                    <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                        <h3 class="text-lg font-bold text-slate-900">
+                            ${ modal.editing ? (i18n.product?.editTitle || 'Edit Product') : (i18n.product?.addTitle || 'Add Product') }
+                        </h3>
+                        <button @click="modal.show = false" class="text-slate-400 hover:text-slate-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
                     </div>
-                    <div v-if="skuStates.length === 0" class="col-span-full text-center text-gray-400 py-8">${ i18n.sku?.empty }</div>
+                    
+                    <form @submit.prevent="saveProduct" class="p-6 space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="col-span-2">
+                                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">${ i18n.product?.mac || 'MAC Address' }</label>
+                                <input type="text" v-model="modal.form.mac" required 
+                                       :placeholder="i18n.product?.macPlaceholder || 'c1f93e1d937c'"
+                                       :disabled="modal.editing"
+                                       class="w-full rounded-lg border-slate-200 bg-slate-50 focus:bg-white focus:border-seeed-500 focus:ring-seeed-500 font-mono text-sm disabled:opacity-60">
+                                <p class="text-[10px] text-slate-400 mt-1">${ i18n.product?.macHint || 'Copy from event log' }</p>
+                            </div>
+                            
+                            <div class="col-span-1">
+                                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">${ i18n.product?.sku || 'SKU' }</label>
+                                <input type="text" v-model="modal.form.sku" required 
+                                       :placeholder="i18n.product?.skuPlaceholder || 'UA-001'"
+                                       class="w-full rounded-lg border-slate-200 focus:border-seeed-500 focus:ring-seeed-500 text-sm">
+                                <p v-if="modal.suggested" class="text-[10px] text-seeed-600 mt-1">${ i18n.product?.suggestedSkuHint || 'Auto-suggested from sensor MAC suffix' }</p>
+                            </div>
+                            
+                            <div class="col-span-1">
+                                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">${ i18n.product?.name || 'Name' }</label>
+                                <input type="text" v-model="modal.form.name" required 
+                                       :placeholder="i18n.product?.namePlaceholder || 'Product Name'"
+                                       class="w-full rounded-lg border-slate-200 focus:border-seeed-500 focus:ring-seeed-500 text-sm">
+                                <p v-if="modal.suggested" class="text-[10px] text-seeed-600 mt-1">${ i18n.product?.suggestedNameHint || 'Temporary name suggested (edit as needed)' }</p>
+                            </div>
+
+                            <div class="col-span-2">
+                                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">${ i18n.product?.videoFile || 'Video File' }</label>
+                                <div class="relative">
+                                    <span class="absolute left-3 top-2.5 text-slate-400">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                    </span>
+                                    <input type="text" v-model="modal.form.video"
+                                           :placeholder="i18n.product?.videoPlaceholder || 'video.mp4'"
+                                           class="w-full rounded-lg border-slate-200 pl-9 focus:border-seeed-500 focus:ring-seeed-500 text-sm">
+                                </div>
+                                <p class="text-[10px] text-slate-400 mt-1">${ i18n.product?.videoDefaultHint || 'Optional for demo, blank will use default video file' }</p>
+                            </div>
+
+                            <div class="col-span-1">
+                                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">${ i18n.product?.targetScreen || 'Target Screen' }</label>
+                                <input type="text" v-model="modal.form.screen"
+                                       :placeholder="i18n.product?.screenPlaceholder || 'screen-01'"
+                                       class="w-full rounded-lg border-slate-200 focus:border-seeed-500 focus:ring-seeed-500 text-sm">
+                                <p class="text-[10px] text-slate-400 mt-1">${ i18n.product?.screenDefaultHint || 'Optional for demo, blank will use default screen' }</p>
+                            </div>
+
+                            <div class="col-span-1">
+                                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">${ i18n.product?.timeout || 'Timeout (s)' }</label>
+                                <input type="number" v-model.number="modal.form.timeout_s"
+                                       min="0.5" step="0.5"
+                                       :placeholder="i18n.product?.timeoutPlaceholder || 'Leave empty for global'"
+                                       class="w-full rounded-lg border-slate-200 focus:border-seeed-500 focus:ring-seeed-500 text-sm">
+                                <p class="text-[10px] text-slate-400 mt-1">${ i18n.product?.timeoutHint || 'Fallback to global sensor timeout when empty' }</p>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 mt-4">
+                            <button type="button" @click="modal.show = false" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all">
+                                ${ i18n.product?.cancel || 'Cancel' }
+                            </button>
+                            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium text-white bg-seeed-600 hover:bg-seeed-700 shadow-sm shadow-seeed-200 transition-all">
+                                ${ i18n.product?.save || 'Save Product' }
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
-
-        </div>
+        </transition>
     </div>
 
-    <div v-if="modal.show" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 class="text-lg font-semibold mb-4">${ modal.editing ? i18n.product?.editTitle : i18n.product?.addTitle }</h3>
-            <form @submit.prevent="saveProduct">
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium mb-1">${ i18n.product?.mac }</label>
-                        <input type="text" v-model="modal.form.mac" required :placeholder="i18n.product?.macPlaceholder"
-                               :disabled="modal.editing"
-                               class="w-full border rounded px-3 py-2 font-mono text-sm disabled:bg-gray-100">
-                        <div class="text-xs text-gray-400 mt-1">${ i18n.product?.macHint }</div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">${ i18n.product?.sku }</label>
-                        <input type="text" v-model="modal.form.sku" required :placeholder="i18n.product?.skuPlaceholder"
-                               class="w-full border rounded px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">${ i18n.product?.name }</label>
-                        <input type="text" v-model="modal.form.name" required :placeholder="i18n.product?.namePlaceholder"
-                               class="w-full border rounded px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">${ i18n.product?.videoFile }</label>
-                        <input type="text" v-model="modal.form.video" required :placeholder="i18n.product?.videoPlaceholder"
-                               class="w-full border rounded px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">${ i18n.product?.targetScreen }</label>
-                        <input type="text" v-model="modal.form.screen" required :placeholder="i18n.product?.screenPlaceholder"
-                               class="w-full border rounded px-3 py-2">
-                    </div>
-                </div>
-                <div class="flex justify-end gap-2 mt-6">
-                    <button type="button" @click="modal.show = false" class="px-4 py-2 border rounded hover:bg-gray-50">${ i18n.product?.cancel }</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">${ i18n.product?.save }</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+    <script>
+        const { createApp } = Vue
 
-<script>
-const { createApp } = Vue
+        createApp({
+            delimiters: ['${', '}'],
+            data() {
+                return {
+                    lang: localStorage.getItem('lang') || 'zh',
+                    i18n: {},
+                    mqttStatus: { broker: '{{ mqtt_broker }}:{{ mqtt_port }}', connected: {{ 'true' if mqtt_connected else 'false' }} },
+                    products: [],
+                    gateways: [],
+                    skuStates: [],
+                    unmappedSensors: [],
+                    events: [],
+                    appConfig: {
+                        dedup_window: 2,
+                        sensor_timeout: 5,
+                        sku_poll_ms: 500,
+                        status_poll_ms: 5000
+                    },
+                    appConfigDraft: {
+                        dedup_window: 2,
+                        sensor_timeout: 5,
+                        sku_poll_ms: 500,
+                        status_poll_ms: 5000
+                    },
+                    configSaving: false,
+                    clockNow: Date.now(),
+                    pollTimers: {
+                        sku: null,
+                        status: null,
+                        tick: null
+                    },
+                    modal: {
+                        show: false,
+                        editing: false,
+                        suggested: false,
+                        form: { mac: '', sku: '', name: '', video: '', screen: '', timeout_s: null }
+                    }
+                }
+            },
+            computed: {
+                activePickups() {
+                    return this.skuStates.filter(s => s.active).length
+                },
+                onlineGatewaysCount() {
+                    return this.gateways.filter(g => this.isGatewayOnline(g.last_seen)).length
+                }
+            },
+            async mounted() {
+                await this.loadI18n()
+                await this.fetchAll()
+                this.startPolling()
+                this.pollTimers.tick = setInterval(() => {
+                    this.clockNow = Date.now()
+                }, 100)
+            },
+            beforeUnmount() {
+                this.clearPolling()
+            },
+            methods: {
+                async loadI18n() {
+                    try {
+                        const r = await fetch(`/api/i18n/${this.lang}`)
+                        this.i18n = await r.json()
+                        document.title = this.i18n.app?.title || 'SeeedUA Smart Retail'
+                    } catch (e) { console.error('Failed to load i18n', e) }
+                },
+                async changeLang() {
+                    localStorage.setItem('lang', this.lang)
+                    await this.loadI18n()
+                },
+                async fetchAll() {
+                    await this.fetchConfig()
+                    await Promise.all([
+                        this.fetchProducts(), 
+                        this.fetchGateways(), 
+                        this.fetchSkuStates(), 
+                        this.fetchUnmappedSensors(),
+                        this.fetchMqttStatus(),
+                        this.fetchEvents()
+                    ])
+                },
+                clearPolling() {
+                    if (this.pollTimers.sku) clearInterval(this.pollTimers.sku)
+                    if (this.pollTimers.status) clearInterval(this.pollTimers.status)
+                    if (this.pollTimers.tick) clearInterval(this.pollTimers.tick)
+                    this.pollTimers.sku = null
+                    this.pollTimers.status = null
+                },
+                startPolling() {
+                    this.clearPolling()
+                    this.pollTimers.sku = setInterval(() => this.fetchSkuStates(), this.appConfig.sku_poll_ms)
+                    this.pollTimers.status = setInterval(() => {
+                        this.fetchGateways()
+                        this.fetchMqttStatus()
+                        this.fetchEvents()
+                        this.fetchUnmappedSensors()
+                    }, this.appConfig.status_poll_ms)
+                },
+                async fetchConfig() {
+                    const r = await fetch('/api/config')
+                    if (!r.ok) return
+                    const cfg = await r.json()
+                    this.appConfig = { ...cfg }
+                    this.appConfigDraft = { ...cfg }
+                },
+                async fetchProducts() {
+                    const r = await fetch('/api/products')
+                    this.products = await r.json()
+                },
+                async fetchGateways() {
+                    const r = await fetch('/api/gateways')
+                    this.gateways = await r.json()
+                },
+                async fetchSkuStates() {
+                    const r = await fetch('/api/sku-states')
+                    this.skuStates = await r.json()
+                },
+                async fetchMqttStatus() {
+                    const r = await fetch('/api/mqtt/status')
+                    const data = await r.json()
+                    this.mqttStatus.connected = data.connected
+                },
+                async fetchUnmappedSensors() {
+                    const r = await fetch('/api/sensors/unmapped?limit=30')
+                    if (!r.ok) return
+                    this.unmappedSensors = await r.json()
+                },
+                async fetchEvents() {
+                    const r = await fetch('/api/events?limit=50')
+                    this.events = await r.json()
+                },
+                async saveConfig() {
+                    this.configSaving = true
+                    try {
+                        const r = await fetch('/api/config', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.appConfigDraft)
+                        })
+                        if (!r.ok) {
+                            throw new Error('save config failed')
+                        }
+                        const data = await r.json()
+                        this.appConfig = { ...data.config }
+                        this.appConfigDraft = { ...data.config }
+                        this.startPolling()
+                        await this.fetchSkuStates()
+                    } catch (e) {
+                        alert(this.i18n.config?.saveFailed || 'Save config failed')
+                    } finally {
+                        this.configSaving = false
+                    }
+                },
+                suggestedFormFromMac(presetMac) {
+                    const mac = (presetMac || '').toLowerCase().replace(/:/g, '')
+                    const suffix = (mac.slice(-4) || '0000').toUpperCase()
+                    return {
+                        mac,
+                        sku: `SKU-${suffix}`,
+                        name: `SeeedUA-${suffix}`,
+                        video: '',
+                        screen: '',
+                        timeout_s: null
+                    }
+                },
+                showAddProduct(presetMac = '') {
+                    if (presetMac) {
+                        this.modal = {
+                            show: true,
+                            editing: false,
+                            suggested: true,
+                            form: this.suggestedFormFromMac(presetMac)
+                        }
+                        return
+                    }
+                    this.modal = {
+                        show: true,
+                        editing: false,
+                        suggested: false,
+                        form: { mac: '', sku: '', name: '', video: '', screen: '', timeout_s: null }
+                    }
+                },
+                editProduct(p) {
+                    this.modal = { show: true, editing: true, suggested: false, form: { ...p, timeout_s: p.timeout_s ?? null } }
+                },
+                async saveProduct() {
+                    const url = this.modal.editing ? `/api/products/${this.modal.form.mac}` : '/api/products'
+                    const method = this.modal.editing ? 'PUT' : 'POST'
+                    const payload = {
+                        ...this.modal.form,
+                        timeout_s: this.modal.form.timeout_s === '' || this.modal.form.timeout_s == null
+                            ? null
+                            : Number(this.modal.form.timeout_s)
+                    }
+                    try {
+                        const r = await fetch(url, {
+                            method,
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        })
+                        if (r.ok) {
+                            this.modal.show = false
+                            this.fetchProducts()
+                            this.fetchUnmappedSensors()
+                        } else {
+                            alert(this.i18n.product?.saveFailed || 'Save failed')
+                        }
+                    } catch (e) { alert('Error saving product') }
+                },
+                async deleteProduct(mac) {
+                    if (!confirm(this.i18n.product?.confirmDelete || 'Delete this product?')) return
+                    const r = await fetch(`/api/products/${mac}`, { method: 'DELETE' })
+                    if (r.ok) this.fetchProducts()
+                },
+                async identifyGateway(id) {
+                    const r = await fetch(`/api/gateways/${id}/identify`, { method: 'POST' })
+                    const data = await r.json()
+                    // Optional: show toast instead of alert
+                    console.log(data.message)
+                },
+                async updateGatewayLabel(id, label) {
+                    await fetch(`/api/gateways/${id}/label`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ label })
+                    })
+                },
+                isGatewayOnline(lastSeenStr) {
+                    if (!lastSeenStr) return false
+                    const d = this.parseDateTime(lastSeenStr)
+                    if (isNaN(d.getTime())) return false
+                    const now = new Date()
+                    const diffSeconds = (now - d) / 1000
+                    return diffSeconds < 60 && diffSeconds > -60
+                },
+                formatTime(t) {
+                    if (!t) return ''
+                    if (typeof t === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(t)) {
+                        return t
+                    }
+                    const d = this.parseDateTime(t)
+                    if (isNaN(d.getTime())) return String(t)
+                    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                },
+                parseDateTime(value) {
+                    if (value instanceof Date) return value
+                    if (typeof value === 'number') return new Date(value)
+                    if (typeof value !== 'string') return new Date('invalid')
 
-createApp({
-    delimiters: ['${', '}'],
-    data() {
-        return {
-            lang: localStorage.getItem('lang') || 'zh',
-            i18n: {},
-            mqttStatus: { broker: '{{ mqtt_broker }}:{{ mqtt_port }}', connected: {{ 'true' if mqtt_connected else 'false' }} },
-            products: [],
-            gateways: [],
-            skuStates: [],
-            modal: {
-                show: false,
-                editing: false,
-                form: { mac: '', sku: '', name: '', video: '', screen: '' }
+                    // Support backend format: "YYYY-MM-DD HH:MM:SS"
+                    const normalized = /^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}$/.test(value)
+                        ? value.replace(' ', 'T')
+                        : value
+                    return new Date(normalized)
+                },
+                skuCountdownPercent(s) {
+                    if (!s.active || !s.last_seen) return 0
+                    const timeoutMs = ((s.timeout_s || this.appConfig.sensor_timeout) || 0) * 1000
+                    if (timeoutMs <= 0) return 0
+                    const remainingMs = timeoutMs - (this.clockNow - s.last_seen * 1000)
+                    const ratio = Math.max(0, Math.min(1, remainingMs / timeoutMs))
+                    return Math.round(ratio * 100)
+                },
+                formatCountdownSeconds(s) {
+                    if (!s.active || !s.last_seen) return '0.0'
+                    const timeoutMs = ((s.timeout_s || this.appConfig.sensor_timeout) || 0) * 1000
+                    if (timeoutMs <= 0) return '0.0'
+                    const remainingMs = Math.max(0, timeoutMs - (this.clockNow - s.last_seen * 1000))
+                    return (remainingMs / 1000).toFixed(1)
+                }
             }
-        }
-    },
-    async mounted() {
-        await this.loadI18n()
-        this.fetchAll()
-        setInterval(() => this.fetchSkuStates(), 500)
-        setInterval(() => this.fetchGateways(), 5000)
-        setInterval(() => this.fetchMqttStatus(), 5000)
-    },
-    methods: {
-        async loadI18n() {
-            const r = await fetch(`/api/i18n/${this.lang}`)
-            this.i18n = await r.json()
-            document.title = this.i18n.app?.title || 'SeeedUA'
-        },
-        async changeLang() {
-            localStorage.setItem('lang', this.lang)
-            await this.loadI18n()
-        },
-        async fetchAll() {
-            await Promise.all([this.fetchProducts(), this.fetchGateways(), this.fetchSkuStates(), this.fetchMqttStatus()])
-        },
-        async fetchProducts() {
-            const r = await fetch('/api/products')
-            this.products = await r.json()
-        },
-        async fetchGateways() {
-            const r = await fetch('/api/gateways')
-            this.gateways = await r.json()
-        },
-        async fetchSkuStates() {
-            const r = await fetch('/api/sku-states')
-            this.skuStates = await r.json()
-        },
-        async fetchMqttStatus() {
-            const r = await fetch('/api/mqtt/status')
-            const data = await r.json()
-            this.mqttStatus.connected = data.connected
-        },
-        showAddProduct() {
-            this.modal = { show: true, editing: false, form: { mac: '', sku: '', name: '', video: '', screen: '' } }
-        },
-        editProduct(p) {
-            this.modal = { show: true, editing: true, form: { ...p } }
-        },
-        async saveProduct() {
-            const url = this.modal.editing ? `/api/products/${this.modal.form.mac}` : '/api/products'
-            const method = this.modal.editing ? 'PUT' : 'POST'
-            const r = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.modal.form)
-            })
-            if (r.ok) {
-                this.modal.show = false
-                this.fetchProducts()
-            } else {
-                alert(this.i18n.product?.saveFailed)
-            }
-        },
-        async deleteProduct(mac) {
-            if (!confirm(this.i18n.product?.confirmDelete)) return
-            const r = await fetch(`/api/products/${mac}`, { method: 'DELETE' })
-            if (r.ok) this.fetchProducts()
-        },
-        async identifyGateway(id) {
-            const r = await fetch(`/api/gateways/${id}/identify`, { method: 'POST' })
-            const data = await r.json()
-            alert(data.message || data.status)
-        },
-        async updateGatewayLabel(id, label) {
-            await fetch(`/api/gateways/${id}/label`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ label })
-            })
-        }
-    }
-}).mount('#app')
-</script>
+        }).mount('#app')
+    </script>
 </body>
 </html>

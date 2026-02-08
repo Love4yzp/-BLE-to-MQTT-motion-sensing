@@ -278,9 +278,25 @@ class SensorConfigApp(App):
                 pass
 
         self._send_command(port, "AT+INFO")
+        self._check_device_response(port)
 
         self._refresh_ports()
         self._push_device_panel_state()
+
+    @work(thread=True)
+    def _check_device_response(self, port: str) -> None:
+        time.sleep(3)
+        state = self.device_states.get(port)
+        if state and state.connected and state.mac == "-":
+            self._log_message(
+                port,
+                f"[yellow]{t('devices_notify.no_at_response')}[/yellow]",
+            )
+            self.call_from_thread(
+                self.notify,
+                t("devices_notify.no_at_response"),
+                severity="warning",
+            )
 
     @on(DeviceCard.DisconnectRequested)
     def _on_disconnect_requested(self, message: DeviceCard.DisconnectRequested) -> None:

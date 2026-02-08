@@ -40,6 +40,7 @@ devices_notify:
   disconnected: "Disconnected"
   no_ports: "No serial ports detected"
   ports_refreshed: "Ports refreshed"
+  no_at_response: "Device did not respond to AT commands, may not be an nRF52840 sensor"
 
 presets:
   standard:

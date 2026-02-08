@@ -63,28 +63,20 @@ DeviceCard.selected {
     background: $surface-lighten-2;
 }
 
-.card-header {
-    height: auto;
-    align: left middle;
-}
-
 .card-port {
+    height: auto;
     width: 1fr;
-    text-overflow: ellipsis;
 }
 
-.card-info {
+.card-info-line {
     height: auto;
-    margin-left: 1;
     color: $text-muted;
     width: 1fr;
-    text-overflow: ellipsis;
 }
 
 .disconnect-btn {
-    width: auto;
-    min-width: 8;
-    margin-left: 0;
+    width: 100%;
+    margin-top: 1;
 }
 
 .section-title {

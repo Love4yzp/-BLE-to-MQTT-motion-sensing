@@ -3,7 +3,6 @@ from __future__ import annotations
 from rich.markup import escape as rich_escape
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal
 from textual.message import Message
 from textual.widgets import Button, Label, Static
 
@@ -28,19 +27,19 @@ class DeviceCard(Static):
         self.state = state
 
     def compose(self) -> ComposeResult:
-        with Horizontal(classes="card-header"):
-            status = "[green]●[/green]" if self.state.connected else "[red]●[/red]"
-            yield Label(f"{status}  {rich_escape(self.port)}", classes="card-port")
-            yield Button(
-                t("devices.disconnect"),
-                variant="error",
-                classes="disconnect-btn",
-            )
-        with Horizontal(classes="card-info"):
-            yield Label(
-                f"{t('devices.mac_label')}: {self.state.mac}  |  "
-                f"{t('devices.name_label')}: {self.state.name}"
-            )
+        status = "[green]●[/green]" if self.state.connected else "[red]●[/red]"
+        # 窄边栏布局：垂直堆叠，避免水平截断
+        yield Label(f"{status} {rich_escape(self.port)}", classes="card-port")
+        yield Label(f"  MAC: {self.state.mac}", classes="card-info-line")
+        yield Label(
+            f"  {t('devices.name_label')}: {self.state.name}",
+            classes="card-info-line",
+        )
+        yield Button(
+            t("devices.disconnect"),
+            variant="error",
+            classes="disconnect-btn",
+        )
 
     def on_click(self, event) -> None:
         self.post_message(self.Selected(self.port))

@@ -40,6 +40,7 @@ devices_notify:
   disconnected: "已断开连接"
   no_ports: "未检测到可用串口"
   ports_refreshed: "端口已刷新"
+  no_at_response: "设备未响应 AT 指令，可能不是 nRF52840 传感器"
 
 presets:
   standard:

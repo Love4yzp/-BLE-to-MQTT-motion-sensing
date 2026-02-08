@@ -225,6 +225,41 @@ async def test_preset_card_has_threshold_values(mock_serial_ports):
 
 
 @pytest.mark.asyncio
+async def test_language_switch_with_device_connected(mock_serial_ports):
+    set_locale("zh")
+    app = SensorConfigApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+
+        from app import DeviceCard, DeviceState
+        from serial_client import SerialClient
+        from unittest.mock import MagicMock
+
+        mock_client = MagicMock(spec=SerialClient)
+        mock_client.is_connected.return_value = True
+        app.clients["/dev/cu.fake1"] = mock_client
+        app.device_states["/dev/cu.fake1"] = DeviceState(
+            port="/dev/cu.fake1", connected=True, mac="AABBCCDDEEFF"
+        )
+        app.selected_port = "/dev/cu.fake1"
+        app.rebuild_device_stack()
+        await pilot.pause()
+
+        cards = list(app.query(DeviceCard))
+        assert len(cards) == 1
+
+        await pilot.press("l")
+        await pilot.pause()
+        await pilot.press("l")
+        await pilot.pause()
+        await pilot.press("l")
+        await pilot.pause()
+
+        cards_after = list(app.query(DeviceCard))
+        assert len(cards_after) >= 1
+
+
+@pytest.mark.asyncio
 async def test_parse_threshold():
     app = SensorConfigApp()
     assert app._parse_threshold_value("0x0A") == 10

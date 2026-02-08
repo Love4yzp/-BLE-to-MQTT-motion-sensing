@@ -88,29 +88,26 @@ class PresetCard(Static):
             with Horizontal(classes="preset-actions"):
                 yield Button(
                     t("preset_card.apply_selected"),
-                    id=f"apply-sel-{self.preset.name}",
                     variant="primary",
-                    classes="preset-btn",
+                    classes="preset-btn apply-selected",
                 )
                 yield Button(
                     t("preset_card.apply_all"),
-                    id=f"apply-all-{self.preset.name}",
                     variant="warning",
-                    classes="preset-btn",
+                    classes="preset-btn apply-all",
                 )
 
     @on(Button.Pressed)
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if "apply-sel" in event.button.id:
+        if "apply-selected" in event.button.classes:
             self.apply_callback(self.preset, target="selected")
-        elif "apply-all" in event.button.id:
+        elif "apply-all" in event.button.classes:
             self.apply_callback(self.preset, target="all")
 
 
 class DeviceCard(Static):
     def __init__(self, port: str, state: DeviceState, on_select, on_disconnect):
-        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", port)
-        super().__init__(id=f"device-{safe_id}")
+        super().__init__()
         self.port = port
         self.state = state
         self._on_select = on_select
@@ -120,10 +117,8 @@ class DeviceCard(Static):
         with Horizontal(classes="card-header"):
             status = "[green]●[/green]" if self.state.connected else "[red]●[/red]"
             yield Label(f"{status}  {rich_escape(self.port)}", classes="card-port")
-            safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", self.port)
             yield Button(
                 t("devices.disconnect"),
-                id=f"dc-{safe_id}",
                 variant="error",
                 classes="disconnect-btn",
             )
@@ -439,41 +434,44 @@ class SensorConfigApp(App):
 
         self.presets = presets
         container = self.query_one("#preset-container")
-        container.remove_children()
+        for child in list(container.query(PresetCard)):
+            child.remove()
         for preset in presets.values():
             container.mount(PresetCard(preset, self.apply_preset))
 
     def rebuild_device_stack(self) -> None:
         stack = self.query_one("#device-stack", VerticalScroll)
-
-        existing_cards = list(stack.query(DeviceCard))
-        for card in existing_cards:
-            card.remove()
-
-        hint = stack.query("#no-device-hint")
-        existing_hint = list(hint)
+        hint = self.query_one("#no-device-hint", Label)
 
         if not self.clients:
-            if existing_hint:
-                existing_hint[0].update(f"[dim]{t('devices.hint_no_device')}[/dim]")
-            else:
-                stack.mount(
-                    Label(
-                        f"[dim]{t('devices.hint_no_device')}[/dim]",
-                        id="no-device-hint",
-                    )
-                )
+            for card in list(stack.query(DeviceCard)):
+                card.remove()
+            hint.update(f"[dim]{t('devices.hint_no_device')}[/dim]")
+            hint.display = True
             return
 
-        for h in existing_hint:
-            h.remove()
+        hint.display = False
+
+        existing_ports = {c.port for c in stack.query(DeviceCard)}
+        wanted_ports = set(self.clients.keys())
+
+        for card in list(stack.query(DeviceCard)):
+            if card.port not in wanted_ports:
+                card.remove()
 
         for port in self.clients:
-            state = self.device_states.get(port, DeviceState(port=port))
-            card = DeviceCard(port, state, self.select_device, self.disconnect_device)
-            stack.mount(card)
-            if port == self.selected_port:
+            if port not in existing_ports:
+                state = self.device_states.get(port, DeviceState(port=port))
+                card = DeviceCard(
+                    port, state, self.select_device, self.disconnect_device
+                )
+                stack.mount(card)
+
+        for card in stack.query(DeviceCard):
+            if card.port == self.selected_port:
                 card.add_class("selected")
+            else:
+                card.remove_class("selected")
 
     def select_device(self, port: str) -> None:
         """Select a device as the target for config/preset operations."""

@@ -444,18 +444,29 @@ class SensorConfigApp(App):
             container.mount(PresetCard(preset, self.apply_preset))
 
     def rebuild_device_stack(self) -> None:
-        """Rebuild the device card stack from current connected devices."""
         stack = self.query_one("#device-stack", VerticalScroll)
-        stack.remove_children()
+
+        existing_cards = list(stack.query(DeviceCard))
+        for card in existing_cards:
+            card.remove()
+
+        hint = stack.query("#no-device-hint")
+        existing_hint = list(hint)
 
         if not self.clients:
-            stack.mount(
-                Label(
-                    f"[dim]{t('devices.hint_no_device')}[/dim]",
-                    id="no-device-hint",
+            if existing_hint:
+                existing_hint[0].update(f"[dim]{t('devices.hint_no_device')}[/dim]")
+            else:
+                stack.mount(
+                    Label(
+                        f"[dim]{t('devices.hint_no_device')}[/dim]",
+                        id="no-device-hint",
+                    )
                 )
-            )
             return
+
+        for h in existing_hint:
+            h.remove()
 
         for port in self.clients:
             state = self.device_states.get(port, DeviceState(port=port))

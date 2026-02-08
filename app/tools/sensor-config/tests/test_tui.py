@@ -101,15 +101,11 @@ async def test_config_buttons_exist(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_status_bar_shows_port_count(mock_serial_ports):
-    from textual.widgets import Label
-
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        status = app.query_one("#status-bar", Label)
-        rendered = str(status.render())
-        assert "3" in rendered
+        assert "3" in app.sub_title
 
 
 @pytest.mark.asyncio

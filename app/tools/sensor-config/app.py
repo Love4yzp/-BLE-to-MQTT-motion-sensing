@@ -11,7 +11,7 @@ from serial.tools import list_ports
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.validation import Function, Regex
 from textual.widgets import (
     Button,
@@ -119,10 +119,7 @@ class SensorConfigApp(App):
                         variant="primary",
                     )
 
-        with Vertical(id="log-panel"):
-            yield RichLog(id="log", wrap=True, highlight=False, markup=True)
-
-        yield Label(t("devices.status_ready"), id="status-bar")
+        yield RichLog(id="log", wrap=True, highlight=False, markup=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -216,12 +213,9 @@ class SensorConfigApp(App):
     def _update_status_bar(self, total: Optional[int] = None) -> None:
         if total is None:
             total = len(list_ports.comports())
-        try:
-            self.query_one("#status-bar", Label).update(
-                t("devices.status_bar", total=total, connected=len(self.clients))
-            )
-        except Exception:
-            pass
+        self.sub_title = t(
+            "devices.status_bar", total=total, connected=len(self.clients)
+        )
 
     @on(DeviceSidebar.ConnectRequested)
     def _on_connect_requested(self, message: DeviceSidebar.ConnectRequested) -> None:
@@ -398,7 +392,8 @@ class SensorConfigApp(App):
     def _log_message(self, port: str, message: str) -> None:
         try:
             log = self.query_one("#log", RichLog)
-            log.write(f"[{rich_escape(port)}] {message}")
+            prefix = f"\\[{rich_escape(port)}]"
+            log.write(f"{prefix} {message}")
         except Exception:
             pass
 
@@ -485,12 +480,11 @@ class SensorConfigApp(App):
 
     def action_toggle_log(self) -> None:
         try:
-            panel = self.query_one("#log-panel", Vertical)
+            log = self.query_one("#log", RichLog)
         except Exception:
             return
         self.log_expanded = not self.log_expanded
-        panel.styles.height = 24 if self.log_expanded else 10
-        panel.refresh(layout=True)
+        log.styles.height = 20 if self.log_expanded else 8
 
     def action_switch_lang(self) -> None:
         new_lang = "en" if get_locale() == "zh" else "zh"

@@ -1,290 +1,52 @@
 from __future__ import annotations
 
 import functools
-import re
 import time
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
 
 import yaml
 from rich.markup import escape as rich_escape
 from serial.tools import list_ports
-from textual import on
+from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, Grid, VerticalScroll
-from textual.validation import Regex, Function
+from textual.containers import Horizontal, VerticalScroll
+from textual.validation import Function, Regex
 from textual.widgets import (
     Button,
     Footer,
     Header,
     Input,
+    Label,
     RichLog,
-    Select,
-    Static,
     TabbedContent,
     TabPane,
-    Label,
 )
 
 from i18n import get_locale, set_locale, t
+from models import (
+    DeviceState,
+    Preset,
+    apply_at_update,
+    parse_at_line,
+    parse_threshold_value,
+)
 from serial_client import SerialClient
-
-
-@dataclass
-class Preset:
-    name: str
-    threshold: int
-    tail_window: int
-    tx_power: int
-    label: str = ""
-    description: str = ""
-    scenario: str = ""
-    battery: str = ""
-
-
-@dataclass
-class DeviceState:
-    port: str
-    connected: bool = False
-    mac: str = "-"
-    name: str = "-"
-    threshold: Optional[int] = None
-    tail_window: Optional[int] = None
-    tx_power: Optional[int] = None
-
-
-class PresetCard(Static):
-    def __init__(self, preset: Preset, apply_callback):
-        super().__init__()
-        self.preset = preset
-        self.apply_callback = apply_callback
-
-    def compose(self) -> ComposeResult:
-        with Vertical(classes="preset-card-inner"):
-            yield Label(
-                f"[bold]{self.preset.label or self.preset.name}[/bold]",
-                classes="preset-title",
-            )
-            if self.preset.description:
-                yield Label(
-                    f"[dim]{self.preset.description}[/dim]", classes="preset-desc"
-                )
-
-            with Grid(classes="preset-stats"):
-                yield Label(
-                    f"{t('preset_card.threshold')}: 0x{self.preset.threshold:02X}"
-                )
-                yield Label(
-                    f"{t('preset_card.tail_window')}: {self.preset.tail_window}ms"
-                )
-                yield Label(f"{t('preset_card.tx_power')}: {self.preset.tx_power}dBm")
-                if self.preset.battery:
-                    yield Label(f"{t('preset_card.battery')}: {self.preset.battery}")
-                if self.preset.scenario:
-                    yield Label(f"{t('preset_card.scenario')}: {self.preset.scenario}")
-
-            with Horizontal(classes="preset-actions"):
-                yield Button(
-                    t("preset_card.apply_selected"),
-                    variant="primary",
-                    classes="preset-btn apply-selected",
-                )
-                yield Button(
-                    t("preset_card.apply_all"),
-                    variant="warning",
-                    classes="preset-btn apply-all",
-                )
-
-    @on(Button.Pressed)
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if "apply-selected" in event.button.classes:
-            self.apply_callback(self.preset, target="selected")
-        elif "apply-all" in event.button.classes:
-            self.apply_callback(self.preset, target="all")
-
-
-class DeviceCard(Static):
-    def __init__(self, port: str, state: DeviceState, on_select, on_disconnect):
-        super().__init__()
-        self.port = port
-        self.state = state
-        self._on_select = on_select
-        self._on_disconnect = on_disconnect
-
-    def compose(self) -> ComposeResult:
-        with Horizontal(classes="card-header"):
-            status = "[green]●[/green]" if self.state.connected else "[red]●[/red]"
-            yield Label(f"{status}  {rich_escape(self.port)}", classes="card-port")
-            yield Button(
-                t("devices.disconnect"),
-                variant="error",
-                classes="disconnect-btn",
-            )
-        with Horizontal(classes="card-info"):
-            yield Label(
-                f"{t('devices.mac_label')}: {self.state.mac}  |  {t('devices.name_label')}: {self.state.name}"
-            )
-
-    def on_click(self, event) -> None:
-        self._on_select(self.port)
-
-    @on(Button.Pressed)
-    def on_disconnect_btn(self, event: Button.Pressed) -> None:
-        event.stop()
-        self._on_disconnect(self.port)
+from widgets import DeviceCard, DevicePanel, PresetCard
 
 
 class SensorConfigApp(App):
-    CSS = """
-    Screen {
-        background: $surface;
-    }
-
-    TabbedContent {
-        height: 1fr;
-    }
-
-    #device-stack {
-        height: 1fr;
-        padding: 1;
-    }
-
-    DeviceCard {
-        height: auto;
-        padding: 1;
-        margin: 0 0 1 0;
-        background: $surface-lighten-1;
-        border: tall $primary;
-    }
-
-    DeviceCard.selected {
-        border: tall $accent;
-        background: $surface-lighten-2;
-    }
-
-    .card-header {
-        height: auto;
-        align: left middle;
-    }
-
-    .card-port {
-        width: 1fr;
-    }
-
-    .card-info {
-        height: auto;
-        margin-left: 2;
-        color: $text-muted;
-    }
-
-    .disconnect-btn {
-        margin-left: 1;
-    }
-
-    #preset-container {
-        layout: grid;
-        grid-size: 3;
-        grid-gutter: 1;
-        padding: 1;
-    }
-
-    PresetCard {
-        height: auto;
-        background: $surface-lighten-1;
-        border: tall $primary;
-        padding: 1;
-    }
-    
-    PresetCard:hover {
-        border: tall $accent;
-    }
-
-    .preset-title {
-        text-align: center;
-        width: 100%;
-        padding-bottom: 1;
-    }
-
-    .preset-desc {
-        text-align: center;
-        width: 100%;
-        padding-bottom: 1;
-    }
-
-    .preset-stats {
-        grid-size: 2;
-        grid-gutter: 1;
-        margin-bottom: 1;
-    }
-
-    .preset-actions {
-        align: center middle;
-        height: auto;
-        margin-top: 1;
-    }
-
-    .preset-btn {
-        margin: 0 1;
-    }
-
-    .config-section {
-        padding: 1 2;
-    }
-
-    .field-label {
-        margin-top: 1;
-        color: $text-muted;
-    }
-
-    .field-explanation {
-        margin-bottom: 1;
-        color: $text-muted;
-        text-style: italic;
-    }
-
-    Input {
-        margin-bottom: 0;
-    }
-
-    RichLog {
-        background: $surface;
-        color: $text;
-        border: solid $accent;
-    }
-
-    #status-bar {
-        dock: bottom;
-        height: 1;
-        background: $primary-darken-2;
-        color: $text-muted;
-        padding-left: 1;
-    }
-    
-    .button-row {
-        height: auto;
-        margin: 1 0;
-        align: center middle;
-    }
-    
-    Button {
-        margin: 0 1;
-    }
-    
-    Select {
-        width: 1fr;
-    }
-    """
+    CSS_PATH = "styles.tcss"
 
     BINDINGS = [
-        Binding("q", "quit", t("bindings.quit")),
-        Binding("r", "refresh_ports", t("bindings.refresh_ports")),
-        Binding("1", "show_tab('tab-devices')", t("bindings.devices")),
-        Binding("2", "show_tab('tab-presets')", t("bindings.presets")),
-        Binding("3", "show_tab('tab-config')", t("bindings.config")),
-        Binding("4", "show_tab('tab-log')", t("bindings.log")),
-        Binding("l", "switch_lang", t("bindings.switch_lang")),
+        Binding("q", "quit", "Quit"),
+        Binding("r", "refresh_ports", "Refresh"),
+        Binding("1", "show_tab('tab-devices')", "Devices"),
+        Binding("2", "show_tab('tab-presets')", "Presets"),
+        Binding("3", "show_tab('tab-config')", "Config"),
+        Binding("4", "show_tab('tab-log')", "Log"),
+        Binding("l", "switch_lang", "Lang"),
     ]
 
     def __init__(self) -> None:
@@ -301,23 +63,12 @@ class SensorConfigApp(App):
 
         with TabbedContent(initial="tab-devices"):
             with TabPane(t("tabs.devices"), id="tab-devices"):
-                with Horizontal(classes="button-row"):
-                    yield Select(
-                        [], id="port-select", prompt=t("devices.select_prompt")
-                    )
-                    yield Button(
-                        t("devices.connect"), id="btn-connect", variant="success"
-                    )
-                    yield Button(t("devices.refresh"), id="btn-refresh")
-                with VerticalScroll(id="device-stack"):
-                    yield Label(
-                        f"[dim]{t('devices.hint_empty')}[/dim]",
-                        id="no-device-hint",
-                    )
+                yield DevicePanel(id="device-panel")
 
             with TabPane(t("tabs.presets"), id="tab-presets"):
                 with VerticalScroll(id="preset-container"):
-                    pass
+                    for preset in self.presets.values():
+                        yield PresetCard(preset)
 
             with TabPane(t("tabs.config"), id="tab-config"):
                 with VerticalScroll(classes="config-section"):
@@ -332,7 +83,8 @@ class SensorConfigApp(App):
                         ],
                     )
                     yield Label(
-                        t("config.threshold_explanation"), classes="field-explanation"
+                        t("config.threshold_explanation"),
+                        classes="field-explanation",
                     )
 
                     yield Label(t("config.tail_label"), classes="field-label")
@@ -387,10 +139,10 @@ class SensorConfigApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.load_presets()
-        self.refresh_port_select()
+        self._load_presets()
+        self._refresh_ports()
 
-    def load_presets(self) -> None:
+    def _load_presets(self) -> None:
         presets: Dict[str, Preset] = {}
         if self.preset_dir.exists():
             for path in sorted(self.preset_dir.glob("*.yaml")):
@@ -405,14 +157,14 @@ class SensorConfigApp(App):
 
                     presets[name] = Preset(
                         name=name,
-                        threshold=self._parse_threshold_value(
-                            data.get("threshold_hex")
-                        ),
+                        threshold=parse_threshold_value(data.get("threshold_hex")),
                         tail_window=int(data.get("tail_window_ms", 3000)),
                         tx_power=int(data.get("tx_power_dbm", 4)),
-                        label=meta_label
-                        if meta_label != f"presets.{name}.label"
-                        else name,
+                        label=(
+                            meta_label
+                            if meta_label != f"presets.{name}.label"
+                            else name
+                        ),
                         description=(
                             "" if meta_desc == f"presets.{name}.desc" else meta_desc
                         ),
@@ -431,138 +183,92 @@ class SensorConfigApp(App):
                     self.notify(
                         f"Error loading preset {path.name}: {e}", severity="error"
                     )
-
         self.presets = presets
-        container = self.query_one("#preset-container")
+        self._rebuild_preset_container()
+
+    def _rebuild_preset_container(self) -> None:
+        try:
+            container = self.query_one("#preset-container")
+        except Exception:
+            return
         for child in list(container.query(PresetCard)):
             child.remove()
-        for preset in presets.values():
-            container.mount(PresetCard(preset, self.apply_preset))
+        for preset in self.presets.values():
+            container.mount(PresetCard(preset))
 
-    def rebuild_device_stack(self) -> None:
-        stack = self.query_one("#device-stack", VerticalScroll)
-        hint = self.query_one("#no-device-hint", Label)
-
-        if not self.clients:
-            for card in list(stack.query(DeviceCard)):
-                card.remove()
-            hint.update(f"[dim]{t('devices.hint_no_device')}[/dim]")
-            hint.display = True
-            return
-
-        hint.display = False
-
-        existing_ports = {c.port for c in stack.query(DeviceCard)}
-        wanted_ports = set(self.clients.keys())
-
-        for card in list(stack.query(DeviceCard)):
-            if card.port not in wanted_ports:
-                card.remove()
-
-        for port in self.clients:
-            if port not in existing_ports:
-                state = self.device_states.get(port, DeviceState(port=port))
-                card = DeviceCard(
-                    port, state, self.select_device, self.disconnect_device
-                )
-                stack.mount(card)
-
-        for card in stack.query(DeviceCard):
-            if card.port == self.selected_port:
-                card.add_class("selected")
-            else:
-                card.remove_class("selected")
-
-    def select_device(self, port: str) -> None:
-        """Select a device as the target for config/preset operations."""
-        self.selected_port = port
-        self.query_one("#config-target-label", Label).update(
-            t("devices.target_label", port=rich_escape(port))
-        )
-        self.rebuild_device_stack()
-        if port in self.clients:
-            self.send_command(port, "AT+INFO")
-
-    def refresh_available_ports(self) -> None:
-        """Check for disappeared ports, disconnect stale clients, update UI."""
+    def _refresh_ports(self) -> None:
         ports = list_ports.comports()
         current = {p.device for p in ports}
+
         for port in list(self.clients.keys()):
             if port not in current:
-                self.disconnect_device(port)
-        self.query_one("#status-bar", Label).update(
-            t("devices.status_bar", total=len(ports), connected=len(self.clients))
-        )
-        self.rebuild_device_stack()
+                self._disconnect_device(port)
 
-    def refresh_port_select(self) -> None:
-        """填充串口下拉列表，过滤掉已连接的端口。"""
-        ports = list_ports.comports()
-        select = self.query_one("#port-select", Select)
         options = [
             (f"{p.device} - {p.description}", p.device)
             for p in ports
             if p.device not in self.clients
         ]
-        select.set_options(options)
-        self.query_one("#status-bar", Label).update(
-            t("devices.status_bar", total=len(ports), connected=len(self.clients))
-        )
+        self._push_device_panel_state(port_options=options)
+        self._update_status_bar(total=len(ports))
 
-    @on(Button.Pressed, "#btn-connect")
-    def on_btn_connect(self) -> None:
-        select = self.query_one("#port-select", Select)
-        if select.value == Select.BLANK:
+    def _push_device_panel_state(
+        self,
+        port_options: Optional[List] = None,
+    ) -> None:
+        try:
+            panel = self.query_one("#device-panel", DevicePanel)
+        except Exception:
+            return
+        panel.devices = dict(self.device_states)
+        panel.selected_port = self.selected_port
+        if port_options is not None:
+            panel.port_options = port_options
+
+    def _update_status_bar(self, total: Optional[int] = None) -> None:
+        if total is None:
+            total = len(list_ports.comports())
+        try:
+            self.query_one("#status-bar", Label).update(
+                t("devices.status_bar", total=total, connected=len(self.clients))
+            )
+        except Exception:
+            pass
+
+    @on(DevicePanel.ConnectRequested)
+    def _on_connect_requested(self, message: DevicePanel.ConnectRequested) -> None:
+        if message.port is None:
             self.notify(t("devices_notify.select_port_first"), severity="warning")
             return
-        port = str(select.value)
-        if port in self.clients:
+        if message.port in self.clients:
             self.notify(t("devices_notify.already_connected"), severity="warning")
             return
-        self.run_worker(lambda p=port: self.connect_device(p), thread=True)
+        self._connect_device(message.port)
 
-    def connect_device(self, port: str) -> None:
+    @work(thread=True, exclusive=True, group="serial-connect")
+    def _connect_device(self, port: str) -> None:
         if port in self.clients and self.clients[port].is_connected():
             return
 
         self.device_states.setdefault(port, DeviceState(port=port))
 
         client = SerialClient(
-            port=port, on_line=functools.partial(self.on_serial_line, port)
+            port=port,
+            on_line=functools.partial(self._on_serial_line, port),
         )
         try:
             client.connect()
             self.clients[port] = client
             self.device_states[port].connected = True
-            self.log_message(
+            self._log_message(
                 port,
                 f"[green]{t('log.connected', port=rich_escape(port))}[/green]",
             )
-            self.notify(t("devices_notify.connected", port=rich_escape(port)))
-
-            if self.selected_port is None:
-                self.selected_port = port
-                self.call_from_thread(
-                    self.query_one("#config-target-label", Label).update,
-                    t("devices.target_label", port=rich_escape(port)),
-                )
-
-            self.send_command(port, "AT+INFO")
-
-            if not self.has_switched_to_presets:
-                self.call_from_thread(
-                    setattr,
-                    self.query_one(TabbedContent),
-                    "active",
-                    "tab-presets",
-                )
-                self.has_switched_to_presets = True
-
-            self.call_from_thread(self.rebuild_device_stack)
-            self.call_from_thread(self.refresh_port_select)
+            self.call_from_thread(self._after_connect, port)
         except Exception as e:
-            self.log_message(port, f"[red]Connection failed: {e}[/red]")
-            self.notify(
+            self._log_message(port, f"[red]Connection failed: {e}[/red]")
+            self.call_from_thread(
+                self.notify,
                 t(
                     "devices_notify.connect_failed",
                     port=rich_escape(port),
@@ -571,7 +277,35 @@ class SensorConfigApp(App):
                 severity="error",
             )
 
-    def disconnect_device(self, port: str) -> None:
+    def _after_connect(self, port: str) -> None:
+        self.notify(t("devices_notify.connected", port=rich_escape(port)))
+
+        if self.selected_port is None:
+            self.selected_port = port
+            try:
+                self.query_one("#config-target-label", Label).update(
+                    t("devices.target_label", port=rich_escape(port))
+                )
+            except Exception:
+                pass
+
+        self._send_command(port, "AT+INFO")
+
+        if not self.has_switched_to_presets:
+            try:
+                self.query_one(TabbedContent).active = "tab-presets"
+            except Exception:
+                pass
+            self.has_switched_to_presets = True
+
+        self._refresh_ports()
+        self._push_device_panel_state()
+
+    @on(DeviceCard.DisconnectRequested)
+    def _on_disconnect_requested(self, message: DeviceCard.DisconnectRequested) -> None:
+        self._disconnect_device(message.port)
+
+    def _disconnect_device(self, port: str) -> None:
         if port in self.clients:
             try:
                 self.clients[port].disconnect()
@@ -586,79 +320,97 @@ class SensorConfigApp(App):
 
         if self.selected_port == port:
             self.selected_port = next(iter(self.clients), None)
-            if self.selected_port:
-                self.query_one("#config-target-label", Label).update(
-                    t("devices.target_label", port=rich_escape(self.selected_port))
-                )
-            else:
-                self.query_one("#config-target-label", Label).update(
-                    t("devices.target_none")
-                )
-
-        self.log_message(port, "[yellow]Disconnected[/yellow]")
-        self.rebuild_device_stack()
-        self.refresh_port_select()
-
-    def send_command(self, port: str, command: str) -> None:
-        if port in self.clients:
-            self.log_message(port, f"[blue]>> {command}[/blue]")
+            target_text = (
+                t("devices.target_label", port=rich_escape(self.selected_port))
+                if self.selected_port
+                else t("devices.target_none")
+            )
             try:
-                self.clients[port].send_command(command)
-            except Exception as e:
-                self.log_message(
-                    port,
-                    f"[red]{t('log.command_error', error=str(e))}[/red]",
-                )
+                self.query_one("#config-target-label", Label).update(target_text)
+            except Exception:
+                pass
 
-    def on_serial_line(self, port: str, line: str) -> None:
-        self.call_from_thread(self.handle_serial_line, port, line)
+        self._log_message(port, "[yellow]Disconnected[/yellow]")
+        self._refresh_ports()
+        self._push_device_panel_state()
 
-    def handle_serial_line(self, port: str, line: str) -> None:
-        self.log_message(port, line)
+    @on(DeviceCard.Selected)
+    def _on_device_selected(self, message: DeviceCard.Selected) -> None:
+        self.selected_port = message.port
+        try:
+            self.query_one("#config-target-label", Label).update(
+                t("devices.target_label", port=rich_escape(message.port))
+            )
+        except Exception:
+            pass
+        self._push_device_panel_state()
+        if message.port in self.clients:
+            self._send_command(message.port, "AT+INFO")
+
+    @on(DevicePanel.RefreshRequested)
+    def _on_refresh_requested(self, message: DevicePanel.RefreshRequested) -> None:
+        self._refresh_ports()
+        self.notify(t("devices_notify.ports_refreshed"))
+
+    def _on_serial_line(self, port: str, line: str) -> None:
+        self.call_from_thread(self._handle_serial_line, port, line)
+
+    def _handle_serial_line(self, port: str, line: str) -> None:
+        self._log_message(port, line)
 
         state = self.device_states.get(port)
         if not state:
             return
 
-        mac_match = re.search(r"\bMAC:\s*(.+)$", line)
-        if mac_match:
-            state.mac = mac_match.group(1).strip()
-            self.rebuild_device_stack()
+        update = parse_at_line(line)
+        changed = apply_at_update(state, update)
 
-        name_match = re.search(r"\bName:\s*(.+)$", line)
-        if name_match:
-            state.name = name_match.group(1).strip()
-            self.rebuild_device_stack()
+        if changed:
+            self._push_device_panel_state()
 
-        threshold_match = re.search(r"THRESHOLD=0x([0-9A-Fa-f]{2})", line)
-        if threshold_match:
-            state.threshold = int(threshold_match.group(1), 16)
-            if self.selected_port == port:
-                self.query_one(
-                    "#input-threshold", Input
-                ).value = f"0x{state.threshold:02X}"
+        if self.selected_port == port:
+            if update.threshold is not None:
+                try:
+                    self.query_one(
+                        "#input-threshold", Input
+                    ).value = f"0x{state.threshold:02X}"
+                except Exception:
+                    pass
+            if update.tail_window is not None:
+                try:
+                    self.query_one("#input-tail", Input).value = str(state.tail_window)
+                except Exception:
+                    pass
+            if update.tx_power is not None:
+                try:
+                    self.query_one("#input-tx", Input).value = str(state.tx_power)
+                except Exception:
+                    pass
 
-        tail_match = re.search(r"TAILWINDOW=([0-9]+)", line)
-        if tail_match:
-            state.tail_window = int(tail_match.group(1))
-            if self.selected_port == port:
-                self.query_one("#input-tail", Input).value = str(state.tail_window)
+    def _send_command(self, port: str, command: str) -> None:
+        if port in self.clients:
+            self._log_message(port, f"[blue]>> {command}[/blue]")
+            try:
+                self.clients[port].send_command(command)
+            except Exception as e:
+                self._log_message(
+                    port,
+                    f"[red]{t('log.command_error', error=str(e))}[/red]",
+                )
 
-        tx_match = re.search(r"TXPOWER=([-0-9]+)", line)
-        if tx_match:
-            state.tx_power = int(tx_match.group(1))
-            if self.selected_port == port:
-                self.query_one("#input-tx", Input).value = str(state.tx_power)
+    def _log_message(self, port: str, message: str) -> None:
+        try:
+            log = self.query_one("#log", RichLog)
+            log.write(f"[{rich_escape(port)}] {message}")
+        except Exception:
+            pass
 
-    def log_message(self, port: str, message: str) -> None:
-        log = self.query_one("#log", RichLog)
-        log.write(f"[{rich_escape(port)}] {message}")
-
-    def apply_preset(self, preset: Preset, target: str) -> None:
-        targets = []
-        if target == "all":
+    @on(PresetCard.Applied)
+    def _on_preset_applied(self, message: PresetCard.Applied) -> None:
+        targets: List[str] = []
+        if message.target == "all":
             targets = list(self.clients.keys())
-        elif target == "selected":
+        elif message.target == "selected":
             if self.selected_port and self.selected_port in self.clients:
                 targets = [self.selected_port]
             else:
@@ -669,6 +421,7 @@ class SensorConfigApp(App):
             self.notify(t("preset_notify.no_devices"), severity="warning")
             return
 
+        preset = message.preset
         self.notify(t("preset_notify.applying", name=preset.name, count=len(targets)))
 
         commands = [
@@ -679,54 +432,22 @@ class SensorConfigApp(App):
         ]
 
         for port in targets:
-            self.run_worker(self.send_commands_worker(port, commands), thread=True)
+            self._send_commands_batch(port, commands)
 
-    def send_commands_worker(self, port: str, commands: List[str]) -> None:
+    @work(thread=True)
+    def _send_commands_batch(self, port: str, commands: List[str]) -> None:
         for cmd in commands:
-            self.send_command(port, cmd)
+            self._send_command(port, cmd)
             time.sleep(0.1)
 
-    def action_show_tab(self, tab: str) -> None:
-        self.query_one(TabbedContent).active = tab
-
-    def action_refresh_ports(self) -> None:
-        self.refresh_available_ports()
-        self.notify(t("devices_notify.ports_refreshed"))
-
-    def action_switch_lang(self) -> None:
-        new_lang = "en" if get_locale() == "zh" else "zh"
-        set_locale(new_lang)
-        self.notify(f"{t('bindings.switch_lang')}: {new_lang}")
-        self.rebuild_ui()
-
-    def rebuild_ui(self) -> None:
-        self.load_presets()
-        self.rebuild_device_stack()
-        self.refresh_port_select()
-        if self.selected_port:
-            self.query_one("#config-target-label", Label).update(
-                t("devices.target_label", port=rich_escape(self.selected_port))
-            )
-        else:
-            self.query_one("#config-target-label", Label).update(
-                t("devices.target_none")
-            )
-
-    @on(Button.Pressed, "#btn-refresh")
-    def on_btn_refresh(self) -> None:
-        self.refresh_port_select()
-        self.refresh_available_ports()
-
     @on(Button.Pressed, "#btn-apply-config")
-    def on_btn_apply_config(self) -> None:
+    def _on_apply_config(self) -> None:
         if not self.selected_port or self.selected_port not in self.clients:
             self.notify(t("config_notify.no_device"), severity="error")
             return
-
         try:
             t_val = self.query_one("#input-threshold", Input).value
-            threshold = self._parse_threshold_value(t_val)
-
+            threshold = parse_threshold_value(t_val)
             tail = int(self.query_one("#input-tail", Input).value)
             tx = int(self.query_one("#input-tx", Input).value)
 
@@ -736,9 +457,7 @@ class SensorConfigApp(App):
                 f"AT+TXPOWER={tx}",
                 "AT+INFO",
             ]
-            self.run_worker(
-                self.send_commands_worker(self.selected_port, commands), thread=True
-            )
+            self._send_commands_batch(self.selected_port, commands)
             self.notify(t("config_notify.applied"))
         except Exception as e:
             self.notify(
@@ -746,39 +465,40 @@ class SensorConfigApp(App):
             )
 
     @on(Button.Pressed, "#btn-save-flash")
-    def on_btn_save_flash(self) -> None:
+    def _on_save_flash(self) -> None:
         if self.selected_port and self.selected_port in self.clients:
-            self.send_command(self.selected_port, "AT+SAVE")
+            self._send_command(self.selected_port, "AT+SAVE")
             self.notify(t("config_notify.saved"))
 
     @on(Button.Pressed, "#btn-defaults")
-    def on_btn_defaults(self) -> None:
+    def _on_defaults(self) -> None:
         if self.selected_port and self.selected_port in self.clients:
-            self.send_command(self.selected_port, "AT+DEFAULT")
+            self._send_command(self.selected_port, "AT+DEFAULT")
             self.notify(t("config_notify.restored"))
 
     @on(Button.Pressed, "#btn-reboot")
-    def on_btn_reboot(self) -> None:
+    def _on_reboot(self) -> None:
         if self.selected_port and self.selected_port in self.clients:
-            self.send_command(self.selected_port, "AT+REBOOT")
+            self._send_command(self.selected_port, "AT+REBOOT")
             self.notify(t("config_notify.rebooting"))
 
+    def action_show_tab(self, tab: str) -> None:
+        self.query_one(TabbedContent).active = tab
+
+    def action_refresh_ports(self) -> None:
+        self._refresh_ports()
+        self.notify(t("devices_notify.ports_refreshed"))
+
+    def action_switch_lang(self) -> None:
+        new_lang = "en" if get_locale() == "zh" else "zh"
+        set_locale(new_lang)
+        self.notify(f"{t('bindings.switch_lang')}: {new_lang}")
+        self._load_presets()
+        self._refresh_ports()
+        self._push_device_panel_state()
+
     def _parse_threshold_value(self, raw: object) -> int:
-        if raw is None:
-            return 0x0A
-        if isinstance(raw, int):
-            return raw
-        if isinstance(raw, str):
-            text = raw.strip().lower()
-            if text.startswith("0x"):
-                return int(text, 16)
-            if re.fullmatch(r"[0-9a-f]+", text):
-                return int(text, 16)
-            try:
-                return int(text)
-            except ValueError:
-                pass
-        return 0x0A
+        return parse_threshold_value(raw)
 
 
 if __name__ == "__main__":

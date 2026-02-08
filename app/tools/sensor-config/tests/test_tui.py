@@ -1,21 +1,18 @@
-"""Textual App.run_test() tests for SensorConfigApp.
-
-Verifies: app launches, tabs render, widgets exist, language switching,
-preset cards display, port select dropdown, and config inputs.
-"""
-
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from i18n import set_locale, t
 from app import SensorConfigApp
+from i18n import get_locale, set_locale
+from models import DeviceState, parse_at_line, apply_at_update, parse_threshold_value
+from serial_client import SerialClient
+from widgets import DeviceCard, PresetCard
 
 
 @pytest.mark.asyncio
@@ -34,11 +31,11 @@ async def test_app_launches_and_has_tabs(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_port_select_populated(mock_serial_ports):
+    from textual.widgets import Select
+
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-
-        from textual.widgets import Select
 
         select = app.query_one("#port-select", Select)
         assert select is not None
@@ -54,10 +51,8 @@ async def test_preset_cards_rendered(mock_serial_ports):
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        from app import PresetCard
-
-        cards = app.query(PresetCard)
-        assert len(list(cards)) == 3
+        cards = list(app.query(PresetCard))
+        assert len(cards) == 3
 
         preset_names = {c.preset.name for c in cards}
         assert "standard" in preset_names
@@ -67,11 +62,11 @@ async def test_preset_cards_rendered(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_config_inputs_exist(mock_serial_ports):
+    from textual.widgets import Input
+
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-
-        from textual.widgets import Input
 
         threshold_input = app.query_one("#input-threshold", Input)
         tail_input = app.query_one("#input-tail", Input)
@@ -84,11 +79,11 @@ async def test_config_inputs_exist(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_config_buttons_exist(mock_serial_ports):
+    from textual.widgets import Button
+
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-
-        from textual.widgets import Button
 
         apply_btn = app.query_one("#btn-apply-config", Button)
         save_btn = app.query_one("#btn-save-flash", Button)
@@ -103,11 +98,11 @@ async def test_config_buttons_exist(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_status_bar_shows_port_count(mock_serial_ports):
+    from textual.widgets import Label
+
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-
-        from textual.widgets import Label
 
         status = app.query_one("#status-bar", Label)
         rendered = str(status.render())
@@ -116,11 +111,11 @@ async def test_status_bar_shows_port_count(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_no_device_hint_visible(mock_serial_ports):
+    from textual.widgets import Label
+
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-
-        from textual.widgets import Label
 
         hint = app.query_one("#no-device-hint", Label)
         assert hint is not None
@@ -128,11 +123,11 @@ async def test_no_device_hint_visible(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_log_widget_exists(mock_serial_ports):
+    from textual.widgets import RichLog
+
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-
-        from textual.widgets import RichLog
 
         log = app.query_one("#log", RichLog)
         assert log is not None
@@ -144,8 +139,6 @@ async def test_language_switch(mock_serial_ports):
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-
-        from i18n import get_locale
 
         initial = get_locale()
 
@@ -169,11 +162,11 @@ async def test_language_switch(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_connect_without_selection_warns(mock_serial_ports):
+    from textual.widgets import Select
+
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-
-        from textual.widgets import Select
 
         select = app.query_one("#port-select", Select)
         select.value = Select.BLANK
@@ -184,11 +177,11 @@ async def test_connect_without_selection_warns(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_keyboard_tab_switching(mock_serial_ports):
+    from textual.widgets import TabbedContent
+
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-
-        from textual.widgets import TabbedContent
 
         tc = app.query_one(TabbedContent)
 
@@ -215,8 +208,6 @@ async def test_preset_card_has_threshold_values(mock_serial_ports):
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        from app import PresetCard
-
         cards = list(app.query(PresetCard))
         standard = [c for c in cards if c.preset.name == "standard"][0]
         assert standard.preset.threshold > 0
@@ -231,10 +222,6 @@ async def test_language_switch_with_device_connected(mock_serial_ports):
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        from app import DeviceCard, DeviceState
-        from serial_client import SerialClient
-        from unittest.mock import MagicMock
-
         mock_client = MagicMock(spec=SerialClient)
         mock_client.is_connected.return_value = True
         app.clients["/dev/cu.fake1"] = mock_client
@@ -242,7 +229,7 @@ async def test_language_switch_with_device_connected(mock_serial_ports):
             port="/dev/cu.fake1", connected=True, mac="AABBCCDDEEFF"
         )
         app.selected_port = "/dev/cu.fake1"
-        app.rebuild_device_stack()
+        app._push_device_panel_state()
         await pilot.pause()
 
         cards = list(app.query(DeviceCard))
@@ -261,10 +248,37 @@ async def test_language_switch_with_device_connected(mock_serial_ports):
 
 @pytest.mark.asyncio
 async def test_parse_threshold():
-    app = SensorConfigApp()
-    assert app._parse_threshold_value("0x0A") == 10
-    assert app._parse_threshold_value("0x3F") == 63
-    assert app._parse_threshold_value("0a") == 10
-    assert app._parse_threshold_value(None) == 10
-    assert app._parse_threshold_value(15) == 15
-    assert app._parse_threshold_value("invalid") == 10
+    assert parse_threshold_value("0x0A") == 10
+    assert parse_threshold_value("0x3F") == 63
+    assert parse_threshold_value("0a") == 10
+    assert parse_threshold_value(None) == 10
+    assert parse_threshold_value(15) == 15
+    assert parse_threshold_value("invalid") == 10
+
+
+@pytest.mark.asyncio
+async def test_parse_at_line_mac():
+    update = parse_at_line("  MAC: AABBCCDDEEFF")
+    assert update.mac == "AABBCCDDEEFF"
+    assert update.name is None
+
+
+@pytest.mark.asyncio
+async def test_parse_at_line_threshold():
+    update = parse_at_line("THRESHOLD=0x0A")
+    assert update.threshold == 0x0A
+
+
+@pytest.mark.asyncio
+async def test_apply_at_update():
+    state = DeviceState(port="/dev/test")
+    from models import ATUpdate
+
+    update = ATUpdate(mac="ABCDEF123456", threshold=5)
+    changed = apply_at_update(state, update)
+    assert changed is True
+    assert state.mac == "ABCDEF123456"
+    assert state.threshold == 5
+
+    changed2 = apply_at_update(state, ATUpdate())
+    assert changed2 is False

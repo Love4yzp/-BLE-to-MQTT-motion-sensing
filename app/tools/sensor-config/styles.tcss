@@ -1,0 +1,141 @@
+Screen {
+    background: $surface;
+}
+
+TabbedContent {
+    height: 1fr;
+}
+
+DevicePanel {
+    height: 1fr;
+}
+
+#device-stack {
+    height: 1fr;
+    padding: 1;
+}
+
+DeviceCard {
+    height: auto;
+    padding: 1;
+    margin: 0 0 1 0;
+    background: $surface-lighten-1;
+    border: tall $primary;
+}
+
+DeviceCard.selected {
+    border: tall $accent;
+    background: $surface-lighten-2;
+}
+
+.card-header {
+    height: auto;
+    align: left middle;
+}
+
+.card-port {
+    width: 1fr;
+}
+
+.card-info {
+    height: auto;
+    margin-left: 2;
+    color: $text-muted;
+}
+
+.disconnect-btn {
+    margin-left: 1;
+}
+
+#preset-container {
+    layout: grid;
+    grid-size: 3;
+    grid-gutter: 1;
+    padding: 1;
+}
+
+PresetCard {
+    height: auto;
+    background: $surface-lighten-1;
+    border: tall $primary;
+    padding: 1;
+}
+
+PresetCard:hover {
+    border: tall $accent;
+}
+
+.preset-title {
+    text-align: center;
+    width: 100%;
+    padding-bottom: 1;
+}
+
+.preset-desc {
+    text-align: center;
+    width: 100%;
+    padding-bottom: 1;
+}
+
+.preset-stats {
+    grid-size: 2;
+    grid-gutter: 1;
+    margin-bottom: 1;
+}
+
+.preset-actions {
+    align: center middle;
+    height: auto;
+    margin-top: 1;
+}
+
+.preset-btn {
+    margin: 0 1;
+}
+
+.config-section {
+    padding: 1 2;
+}
+
+.field-label {
+    margin-top: 1;
+    color: $text-muted;
+}
+
+.field-explanation {
+    margin-bottom: 1;
+    color: $text-muted;
+    text-style: italic;
+}
+
+Input {
+    margin-bottom: 0;
+}
+
+RichLog {
+    background: $surface;
+    color: $text;
+    border: solid $accent;
+}
+
+#status-bar {
+    dock: bottom;
+    height: 1;
+    background: $primary-darken-2;
+    color: $text-muted;
+    padding-left: 1;
+}
+
+.button-row {
+    height: auto;
+    margin: 1 0;
+    align: center middle;
+}
+
+Button {
+    margin: 0 1;
+}
+
+Select {
+    width: 1fr;
+}

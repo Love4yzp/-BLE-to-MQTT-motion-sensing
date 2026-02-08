@@ -79,7 +79,12 @@ class SensorConfigApp(App):
                 yield Input(
                     placeholder="0x0A",
                     id="input-threshold",
-                    validators=[Regex(r"^0x[0-9A-Fa-f]{2}$", "Must be hex 0x02-0x3F")],
+                    validators=[
+                        Regex(
+                            r"^0x[0-9A-Fa-f]{2}$",
+                            failure_description="Must be hex 0x02-0x3F",
+                        )
+                    ],
                 )
                 yield Label(
                     t("config.threshold_explanation"),
@@ -209,6 +214,9 @@ class SensorConfigApp(App):
         panel.selected_port = self.selected_port
         if port_options is not None:
             panel.port_options = port_options
+        # DeviceState 是原地修改的，dict 浅拷贝后 == 比较仍相等，
+        # reactive(recompose=True) 不会触发重绘，需要手动刷新。
+        panel.refresh(recompose=True)
 
     def _update_status_bar(self, total: Optional[int] = None) -> None:
         if total is None:

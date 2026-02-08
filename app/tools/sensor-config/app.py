@@ -446,7 +446,7 @@ class SensorConfigApp(App):
         if not self.clients:
             stack.mount(
                 Label(
-                    '[dim]未连接任何设备。点击 "添加设备" 开始。[/dim]',
+                    "[dim]未连接任何设备。请选择端口并连接。[/dim]",
                     id="no-device-hint",
                 )
             )
@@ -482,10 +482,14 @@ class SensorConfigApp(App):
         self.rebuild_device_stack()
 
     def refresh_port_select(self) -> None:
-        """填充串口下拉列表。"""
+        """填充串口下拉列表，过滤掉已连接的端口。"""
         ports = list_ports.comports()
         select = self.query_one("#port-select", Select)
-        options = [(f"{p.device} - {p.description}", p.device) for p in ports]
+        options = [
+            (f"{p.device} - {p.description}", p.device)
+            for p in ports
+            if p.device not in self.clients
+        ]
         select.set_options(options)
         self.query_one("#status-bar", Label).update(
             f"检测到 {len(ports)} 个端口，已连接: {len(self.clients)}"
@@ -538,6 +542,7 @@ class SensorConfigApp(App):
                 self.has_switched_to_presets = True
 
             self.call_from_thread(self.rebuild_device_stack)
+            self.call_from_thread(self.refresh_port_select)
         except Exception as e:
             self.log_message(port, f"[red]Connection failed: {e}[/red]")
             self.notify(f"Failed to connect {rich_escape(port)}: {e}", severity="error")
@@ -566,6 +571,7 @@ class SensorConfigApp(App):
 
         self.log_message(port, "[yellow]Disconnected[/yellow]")
         self.rebuild_device_stack()
+        self.refresh_port_select()
 
     def send_command(self, port: str, command: str) -> None:
         if port in self.clients:

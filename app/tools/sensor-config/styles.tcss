@@ -34,15 +34,14 @@ Screen {
     overflow-y: auto;
 }
 
-#log {
-    dock: bottom;
-    height: 8;
-}
-
 #log-panel {
     dock: bottom;
-    height: 8;
+    height: 10;
     border-top: solid $accent;
+}
+
+#log {
+    height: 1fr;
 }
 
 #device-stack {
@@ -142,7 +141,6 @@ Input {
 RichLog {
     background: $surface;
     color: $text;
-    border-top: solid $accent;
 }
 
 #status-bar {

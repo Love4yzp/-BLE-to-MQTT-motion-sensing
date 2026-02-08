@@ -489,7 +489,7 @@ class SensorConfigApp(App):
         except Exception:
             return
         self.log_expanded = not self.log_expanded
-        panel.styles.height = 20 if self.log_expanded else 8
+        panel.styles.height = 24 if self.log_expanded else 10
         panel.refresh(layout=True)
 
     def action_switch_lang(self) -> None:

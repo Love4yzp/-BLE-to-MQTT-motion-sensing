@@ -4,7 +4,7 @@ from typing import Dict, Optional, Sequence, Tuple
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Button, Label, Select, Static
@@ -14,7 +14,7 @@ from models import DeviceState
 from widgets.device_card import DeviceCard
 
 
-class DevicePanel(Static):
+class DeviceSidebar(Static):
     class ConnectRequested(Message):
         def __init__(self, port: Optional[str]) -> None:
             self.port = port
@@ -28,27 +28,28 @@ class DevicePanel(Static):
     port_options: reactive[Sequence[Tuple[str, str]]] = reactive((), recompose=False)
 
     def compose(self) -> ComposeResult:
-        with Horizontal(classes="button-row"):
+        with Vertical(id="sidebar-controls"):
             yield Select(
                 list(self.port_options),
                 id="port-select",
                 prompt=t("devices.select_prompt"),
             )
-            yield Button(t("devices.connect"), id="btn-connect", variant="success")
-            yield Button(t("devices.refresh"), id="btn-refresh")
+            with Horizontal(id="sidebar-buttons"):
+                yield Button(t("devices.connect"), id="btn-connect", variant="success")
+                yield Button(t("devices.refresh"), id="btn-refresh")
 
-        with VerticalScroll(id="device-stack"):
-            if not self.devices:
-                yield Label(
-                    f"[dim]{t('devices.hint_no_device')}[/dim]",
-                    id="no-device-hint",
-                )
-            else:
-                for port, state in self.devices.items():
-                    card = DeviceCard(port, state)
-                    if port == self.selected_port:
-                        card.add_class("selected")
-                    yield card
+            with VerticalScroll(id="device-stack"):
+                if not self.devices:
+                    yield Label(
+                        f"[dim]{t('devices.hint_no_device')}[/dim]",
+                        id="no-device-hint",
+                    )
+                else:
+                    for port, state in self.devices.items():
+                        card = DeviceCard(port, state)
+                        if port == self.selected_port:
+                            card.add_class("selected")
+                        yield card
 
     def watch_port_options(self, options: Sequence[Tuple[str, str]]) -> None:
         try:

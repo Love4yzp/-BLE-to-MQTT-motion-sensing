@@ -2,29 +2,64 @@ Screen {
     background: $surface;
 }
 
-TabbedContent {
-    height: 1fr;
+#sidebar {
+    dock: left;
+    width: 30;
+    background: $surface;
+    border-right: solid $primary;
+    padding: 1;
 }
 
-DevicePanel {
+#sidebar-controls {
+    height: auto;
+}
+
+#sidebar-buttons {
+    height: auto;
+    margin-top: 1;
+}
+
+#sidebar-buttons Button {
+    width: 1fr;
+    margin: 0 1 0 0;
+}
+
+#sidebar-buttons Button:last-child {
+    margin-right: 0;
+}
+
+#main-area {
     height: 1fr;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#log {
+    dock: bottom;
+    height: 8;
+}
+
+#log-panel {
+    dock: bottom;
+    height: 8;
+    border-top: solid $accent;
 }
 
 #device-stack {
     height: 1fr;
-    padding: 1;
+    margin-top: 1;
 }
 
 DeviceCard {
     height: auto;
-    padding: 1;
+    padding: 0 1;
     margin: 0 0 1 0;
     background: $surface-lighten-1;
-    border: tall $primary;
+    border: round $primary;
 }
 
 DeviceCard.selected {
-    border: tall $accent;
+    border: round $accent;
     background: $surface-lighten-2;
 }
 
@@ -35,66 +70,66 @@ DeviceCard.selected {
 
 .card-port {
     width: 1fr;
+    text-overflow: ellipsis;
 }
 
 .card-info {
     height: auto;
-    margin-left: 2;
+    margin-left: 1;
     color: $text-muted;
+    width: 1fr;
+    text-overflow: ellipsis;
 }
 
 .disconnect-btn {
-    margin-left: 1;
+    width: auto;
+    min-width: 8;
+    margin-left: 0;
 }
 
-#preset-container {
-    layout: grid;
-    grid-size: 3;
-    grid-gutter: 1;
-    padding: 1;
+.section-title {
+    margin: 0 0 1 0;
+    color: $accent;
+    text-style: bold;
 }
 
 PresetCard {
     height: auto;
     background: $surface-lighten-1;
-    border: tall $primary;
-    padding: 1;
-}
-
-PresetCard:hover {
-    border: tall $accent;
-}
-
-.preset-title {
-    text-align: center;
-    width: 100%;
-    padding-bottom: 1;
-}
-
-.preset-desc {
-    text-align: center;
-    width: 100%;
-    padding-bottom: 1;
-}
-
-.preset-stats {
-    grid-size: 2;
-    grid-gutter: 1;
+    border: round $primary;
+    padding: 0 1;
     margin-bottom: 1;
 }
 
-.preset-actions {
-    align: center middle;
+PresetCard:hover {
+    border: round $accent;
+}
+
+.preset-row {
     height: auto;
-    margin-top: 1;
+    align: left middle;
+}
+
+.preset-label {
+    width: 1fr;
+    text-overflow: ellipsis;
+}
+
+.preset-battery {
+    width: 11;
+    color: $text-muted;
+    text-align: right;
+    margin-right: 1;
 }
 
 .preset-btn {
-    margin: 0 1;
+    width: 9;
+    min-width: 9;
+    margin-left: 1;
 }
 
-.config-section {
-    padding: 1 2;
+#advanced-config {
+    margin-top: 1;
 }
 
 .field-label {
@@ -103,19 +138,19 @@ PresetCard:hover {
 }
 
 .field-explanation {
-    margin-bottom: 1;
+    margin-bottom: 0;
     color: $text-muted;
     text-style: italic;
 }
 
 Input {
-    margin-bottom: 0;
+    margin-bottom: 1;
 }
 
 RichLog {
     background: $surface;
     color: $text;
-    border: solid $accent;
+    border-top: solid $accent;
 }
 
 #status-bar {
@@ -129,11 +164,11 @@ RichLog {
 .button-row {
     height: auto;
     margin: 1 0;
-    align: center middle;
+    align: left middle;
 }
 
 Button {
-    margin: 0 1;
+    margin: 0 1 0 0;
 }
 
 Select {

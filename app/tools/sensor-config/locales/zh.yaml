@@ -11,6 +11,7 @@ tabs:
 bindings:
   quit: "退出"
   refresh_ports: "刷新端口"
+  toggle_log: "展开日志"
   devices: "设备"
   presets: "预设"
   config: "高级配置"
@@ -65,6 +66,8 @@ preset_card:
   scenario: "场景"
   apply_selected: "应用到选中"
   apply_all: "应用到所有"
+  apply_selected_short: "选中▸"
+  apply_all_short: "全部▸"
 
 preset_notify:
   no_device_selected: "未选中任何已连接设备"

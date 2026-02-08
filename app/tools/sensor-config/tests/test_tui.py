@@ -10,23 +10,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import SensorConfigApp
 from i18n import get_locale, set_locale
-from models import DeviceState, parse_at_line, apply_at_update, parse_threshold_value
+from models import DeviceState, apply_at_update, parse_at_line, parse_threshold_value
 from serial_client import SerialClient
 from widgets import DeviceCard, PresetCard
 
 
 @pytest.mark.asyncio
-async def test_app_launches_and_has_tabs(mock_serial_ports):
+async def test_app_launches_with_three_panels(mock_serial_ports):
+    from textual.containers import VerticalScroll
+    from textual.widgets import RichLog
+
     app = SensorConfigApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        tabs = app.query("TabPane")
-        tab_ids = {tab.id for tab in tabs}
-        assert "tab-devices" in tab_ids
-        assert "tab-presets" in tab_ids
-        assert "tab-config" in tab_ids
-        assert "tab-log" in tab_ids
+        assert app.query_one("#sidebar") is not None
+        assert app.query_one("#main-area", VerticalScroll) is not None
+        assert app.query_one("#log", RichLog) is not None
 
 
 @pytest.mark.asyncio
@@ -37,7 +37,8 @@ async def test_port_select_populated(mock_serial_ports):
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        select = app.query_one("#port-select", Select)
+        sidebar = app.query_one("#sidebar")
+        select = sidebar.query_one("#port-select", Select)
         assert select is not None
         option_values = [val for _label, val in select._options]
         assert "/dev/cu.fake1" in option_values
@@ -51,7 +52,8 @@ async def test_preset_cards_rendered(mock_serial_ports):
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        cards = list(app.query(PresetCard))
+        main_area = app.query_one("#main-area")
+        cards = list(main_area.query(PresetCard))
         assert len(cards) == 3
 
         preset_names = {c.preset.name for c in cards}
@@ -68,9 +70,10 @@ async def test_config_inputs_exist(mock_serial_ports):
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        threshold_input = app.query_one("#input-threshold", Input)
-        tail_input = app.query_one("#input-tail", Input)
-        tx_input = app.query_one("#input-tx", Input)
+        advanced = app.query_one("#advanced-config")
+        threshold_input = advanced.query_one("#input-threshold", Input)
+        tail_input = advanced.query_one("#input-tail", Input)
+        tx_input = advanced.query_one("#input-tx", Input)
 
         assert threshold_input is not None
         assert tail_input is not None
@@ -117,8 +120,33 @@ async def test_no_device_hint_visible(mock_serial_ports):
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
 
-        hint = app.query_one("#no-device-hint", Label)
+        sidebar = app.query_one("#sidebar")
+        hint = sidebar.query_one("#no-device-hint", Label)
         assert hint is not None
+
+
+@pytest.mark.asyncio
+async def test_collapsible_advanced_config_exists(mock_serial_ports):
+    from textual.widgets import Collapsible
+
+    app = SensorConfigApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+
+        advanced = app.query_one("#advanced-config", Collapsible)
+        assert advanced is not None
+
+
+@pytest.mark.asyncio
+async def test_save_flash_button_visible_without_expanding_advanced(mock_serial_ports):
+    from textual.widgets import Button
+
+    app = SensorConfigApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+
+        save_btn = app.query_one("#btn-save-flash", Button)
+        assert save_btn is not None
 
 
 @pytest.mark.asyncio
@@ -173,33 +201,6 @@ async def test_connect_without_selection_warns(mock_serial_ports):
 
         await pilot.click("#btn-connect")
         await pilot.pause()
-
-
-@pytest.mark.asyncio
-async def test_keyboard_tab_switching(mock_serial_ports):
-    from textual.widgets import TabbedContent
-
-    app = SensorConfigApp()
-    async with app.run_test(size=(120, 40)) as pilot:
-        await pilot.pause()
-
-        tc = app.query_one(TabbedContent)
-
-        await pilot.press("2")
-        await pilot.pause()
-        assert tc.active == "tab-presets"
-
-        await pilot.press("3")
-        await pilot.pause()
-        assert tc.active == "tab-config"
-
-        await pilot.press("4")
-        await pilot.pause()
-        assert tc.active == "tab-log"
-
-        await pilot.press("1")
-        await pilot.pause()
-        assert tc.active == "tab-devices"
 
 
 @pytest.mark.asyncio

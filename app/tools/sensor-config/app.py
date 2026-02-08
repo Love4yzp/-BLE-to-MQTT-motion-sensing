@@ -11,17 +11,16 @@ from serial.tools import list_ports
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.validation import Function, Regex
 from textual.widgets import (
     Button,
+    Collapsible,
     Footer,
     Header,
     Input,
     Label,
     RichLog,
-    TabbedContent,
-    TabPane,
 )
 
 from i18n import get_locale, set_locale, t
@@ -33,7 +32,7 @@ from models import (
     parse_threshold_value,
 )
 from serial_client import SerialClient
-from widgets import DeviceCard, DevicePanel, PresetCard
+from widgets import DeviceCard, DeviceSidebar, PresetCard
 
 
 class SensorConfigApp(App):
@@ -42,10 +41,7 @@ class SensorConfigApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh_ports", "Refresh"),
-        Binding("1", "show_tab('tab-devices')", "Devices"),
-        Binding("2", "show_tab('tab-presets')", "Presets"),
-        Binding("3", "show_tab('tab-config')", "Config"),
-        Binding("4", "show_tab('tab-log')", "Log"),
+        Binding("t", "toggle_log", "Toggle Log"),
         Binding("l", "switch_lang", "Lang"),
     ]
 
@@ -55,85 +51,76 @@ class SensorConfigApp(App):
         self.device_states: Dict[str, DeviceState] = {}
         self.presets: Dict[str, Preset] = {}
         self.preset_dir = Path(__file__).resolve().parent / "presets"
-        self.has_switched_to_presets = False
         self.selected_port: Optional[str] = None
+        self.log_expanded = False
 
     def compose(self) -> ComposeResult:
         yield Header()
+        yield DeviceSidebar(id="sidebar")
 
-        with TabbedContent(initial="tab-devices"):
-            with TabPane(t("tabs.devices"), id="tab-devices"):
-                yield DevicePanel(id="device-panel")
+        with VerticalScroll(id="main-area"):
+            yield Label(t("tabs.presets"), classes="section-title")
+            for preset in self.presets.values():
+                yield PresetCard(preset)
 
-            with TabPane(t("tabs.presets"), id="tab-presets"):
-                with VerticalScroll(id="preset-container"):
-                    for preset in self.presets.values():
-                        yield PresetCard(preset)
+            with Horizontal(classes="button-row", id="preset-actions"):
+                yield Button(
+                    t("config.save_flash"),
+                    id="btn-save-flash",
+                    variant="warning",
+                )
+                yield Button(t("config.restore_defaults"), id="btn-defaults")
+                yield Button(t("config.reboot"), id="btn-reboot", variant="error")
 
-            with TabPane(t("tabs.config"), id="tab-config"):
-                with VerticalScroll(classes="config-section"):
-                    yield Label(t("devices.target_none"), id="config-target-label")
+            with Collapsible(title=t("tabs.config"), id="advanced-config"):
+                yield Label(t("devices.target_none"), id="config-target-label")
 
-                    yield Label(t("config.threshold_label"), classes="field-label")
-                    yield Input(
-                        placeholder="0x0A",
-                        id="input-threshold",
-                        validators=[
-                            Regex(r"^0x[0-9A-Fa-f]{2}$", "Must be hex 0x02-0x3F")
-                        ],
-                    )
-                    yield Label(
-                        t("config.threshold_explanation"),
-                        classes="field-explanation",
-                    )
+                yield Label(t("config.threshold_label"), classes="field-label")
+                yield Input(
+                    placeholder="0x0A",
+                    id="input-threshold",
+                    validators=[Regex(r"^0x[0-9A-Fa-f]{2}$", "Must be hex 0x02-0x3F")],
+                )
+                yield Label(
+                    t("config.threshold_explanation"),
+                    classes="field-explanation",
+                )
 
-                    yield Label(t("config.tail_label"), classes="field-label")
-                    yield Input(
-                        placeholder="3000",
-                        id="input-tail",
-                        validators=[
-                            Function(
-                                lambda v: v.isdigit() and 1000 <= int(v) <= 10000,
-                                "Must be 1000-10000 ms",
-                            )
-                        ],
-                    )
-                    yield Label(
-                        t("config.tail_explanation"), classes="field-explanation"
-                    )
-
-                    yield Label(t("config.tx_label"), classes="field-label")
-                    yield Input(
-                        placeholder="4",
-                        id="input-tx",
-                        validators=[
-                            Function(
-                                lambda v: (v.lstrip("-").isdigit())
-                                and -40 <= int(v) <= 4,
-                                "Must be -40 to 4 dBm",
-                            )
-                        ],
-                    )
-                    yield Label(t("config.tx_explanation"), classes="field-explanation")
-
-                    with Horizontal(classes="button-row"):
-                        yield Button(
-                            t("config.apply_config"),
-                            id="btn-apply-config",
-                            variant="primary",
+                yield Label(t("config.tail_label"), classes="field-label")
+                yield Input(
+                    placeholder="3000",
+                    id="input-tail",
+                    validators=[
+                        Function(
+                            lambda v: v.isdigit() and 1000 <= int(v) <= 10000,
+                            "Must be 1000-10000 ms",
                         )
-                        yield Button(
-                            t("config.save_flash"),
-                            id="btn-save-flash",
-                            variant="warning",
-                        )
-                        yield Button(t("config.restore_defaults"), id="btn-defaults")
-                        yield Button(
-                            t("config.reboot"), id="btn-reboot", variant="error"
-                        )
+                    ],
+                )
+                yield Label(t("config.tail_explanation"), classes="field-explanation")
 
-            with TabPane(t("tabs.log"), id="tab-log"):
-                yield RichLog(id="log", wrap=True, highlight=False, markup=True)
+                yield Label(t("config.tx_label"), classes="field-label")
+                yield Input(
+                    placeholder="4",
+                    id="input-tx",
+                    validators=[
+                        Function(
+                            lambda v: (v.lstrip("-").isdigit()) and -40 <= int(v) <= 4,
+                            "Must be -40 to 4 dBm",
+                        )
+                    ],
+                )
+                yield Label(t("config.tx_explanation"), classes="field-explanation")
+
+                with Horizontal(classes="button-row"):
+                    yield Button(
+                        t("config.apply_config"),
+                        id="btn-apply-config",
+                        variant="primary",
+                    )
+
+        with Vertical(id="log-panel"):
+            yield RichLog(id="log", wrap=True, highlight=False, markup=True)
 
         yield Label(t("devices.status_ready"), id="status-bar")
         yield Footer()
@@ -188,13 +175,14 @@ class SensorConfigApp(App):
 
     def _rebuild_preset_container(self) -> None:
         try:
-            container = self.query_one("#preset-container")
+            main_area = self.query_one("#main-area", VerticalScroll)
+            anchor = self.query_one("#preset-actions", Horizontal)
         except Exception:
             return
-        for child in list(container.query(PresetCard)):
+        for child in list(main_area.query(PresetCard)):
             child.remove()
         for preset in self.presets.values():
-            container.mount(PresetCard(preset))
+            main_area.mount(PresetCard(preset), before=anchor)
 
     def _refresh_ports(self) -> None:
         ports = list_ports.comports()
@@ -217,7 +205,7 @@ class SensorConfigApp(App):
         port_options: Optional[List] = None,
     ) -> None:
         try:
-            panel = self.query_one("#device-panel", DevicePanel)
+            panel = self.query_one("#sidebar", DeviceSidebar)
         except Exception:
             return
         panel.devices = dict(self.device_states)
@@ -235,8 +223,8 @@ class SensorConfigApp(App):
         except Exception:
             pass
 
-    @on(DevicePanel.ConnectRequested)
-    def _on_connect_requested(self, message: DevicePanel.ConnectRequested) -> None:
+    @on(DeviceSidebar.ConnectRequested)
+    def _on_connect_requested(self, message: DeviceSidebar.ConnectRequested) -> None:
         if message.port is None:
             self.notify(t("devices_notify.select_port_first"), severity="warning")
             return
@@ -291,13 +279,6 @@ class SensorConfigApp(App):
 
         self._send_command(port, "AT+INFO")
 
-        if not self.has_switched_to_presets:
-            try:
-                self.query_one(TabbedContent).active = "tab-presets"
-            except Exception:
-                pass
-            self.has_switched_to_presets = True
-
         self._refresh_ports()
         self._push_device_panel_state()
 
@@ -347,8 +328,8 @@ class SensorConfigApp(App):
         if message.port in self.clients:
             self._send_command(message.port, "AT+INFO")
 
-    @on(DevicePanel.RefreshRequested)
-    def _on_refresh_requested(self, message: DevicePanel.RefreshRequested) -> None:
+    @on(DeviceSidebar.RefreshRequested)
+    def _on_refresh_requested(self, message: DeviceSidebar.RefreshRequested) -> None:
         self._refresh_ports()
         self.notify(t("devices_notify.ports_refreshed"))
 
@@ -482,20 +463,42 @@ class SensorConfigApp(App):
             self._send_command(self.selected_port, "AT+REBOOT")
             self.notify(t("config_notify.rebooting"))
 
-    def action_show_tab(self, tab: str) -> None:
-        self.query_one(TabbedContent).active = tab
-
     def action_refresh_ports(self) -> None:
         self._refresh_ports()
         self.notify(t("devices_notify.ports_refreshed"))
+
+    def action_toggle_log(self) -> None:
+        try:
+            panel = self.query_one("#log-panel", Vertical)
+        except Exception:
+            return
+        self.log_expanded = not self.log_expanded
+        panel.styles.height = 20 if self.log_expanded else 8
+        panel.refresh(layout=True)
 
     def action_switch_lang(self) -> None:
         new_lang = "en" if get_locale() == "zh" else "zh"
         set_locale(new_lang)
         self.notify(f"{t('bindings.switch_lang')}: {new_lang}")
         self._load_presets()
+        try:
+            self.query_one("#sidebar", DeviceSidebar).refresh(recompose=True)
+            self.query_one("#main-area", VerticalScroll).refresh(recompose=True)
+            self.query_one("#advanced-config", Collapsible).title = t("tabs.config")
+        except Exception:
+            pass
         self._refresh_ports()
         self._push_device_panel_state()
+
+        target_text = (
+            t("devices.target_label", port=rich_escape(self.selected_port))
+            if self.selected_port
+            else t("devices.target_none")
+        )
+        try:
+            self.query_one("#config-target-label", Label).update(target_text)
+        except Exception:
+            pass
 
     def _parse_threshold_value(self, raw: object) -> int:
         return parse_threshold_value(raw)

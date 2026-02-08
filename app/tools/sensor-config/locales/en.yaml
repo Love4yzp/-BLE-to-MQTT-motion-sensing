@@ -11,6 +11,7 @@ tabs:
 bindings:
   quit: "Quit"
   refresh_ports: "Refresh Ports"
+  toggle_log: "Toggle Log"
   devices: "Devices"
   presets: "Presets"
   config: "Config"
@@ -65,6 +66,8 @@ preset_card:
   scenario: "Scenario"
   apply_selected: "Apply to selected"
   apply_all: "Apply to all"
+  apply_selected_short: "Apply▸"
+  apply_all_short: "All▸"
 
 preset_notify:
   no_device_selected: "No connected device selected"

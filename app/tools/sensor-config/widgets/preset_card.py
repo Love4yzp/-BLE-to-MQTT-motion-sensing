@@ -4,7 +4,7 @@ from typing import Literal
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Grid, Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.message import Message
 from textual.widgets import Button, Label, Static
 
@@ -24,41 +24,23 @@ class PresetCard(Static):
         self.preset = preset
 
     def compose(self) -> ComposeResult:
-        with Vertical(classes="preset-card-inner"):
+        with Horizontal(classes="preset-row"):
             yield Label(
                 f"[bold]{self.preset.label or self.preset.name}[/bold]",
-                classes="preset-title",
+                classes="preset-label",
             )
-            if self.preset.description:
-                yield Label(
-                    f"[dim]{self.preset.description}[/dim]",
-                    classes="preset-desc",
-                )
-
-            with Grid(classes="preset-stats"):
-                yield Label(
-                    f"{t('preset_card.threshold')}: 0x{self.preset.threshold:02X}"
-                )
-                yield Label(
-                    f"{t('preset_card.tail_window')}: {self.preset.tail_window}ms"
-                )
-                yield Label(f"{t('preset_card.tx_power')}: {self.preset.tx_power}dBm")
-                if self.preset.battery:
-                    yield Label(f"{t('preset_card.battery')}: {self.preset.battery}")
-                if self.preset.scenario:
-                    yield Label(f"{t('preset_card.scenario')}: {self.preset.scenario}")
-
-            with Horizontal(classes="preset-actions"):
-                yield Button(
-                    t("preset_card.apply_selected"),
-                    variant="primary",
-                    classes="preset-btn apply-selected",
-                )
-                yield Button(
-                    t("preset_card.apply_all"),
-                    variant="warning",
-                    classes="preset-btn apply-all",
-                )
+            battery = self.preset.battery or "-"
+            yield Label(battery, classes="preset-battery")
+            yield Button(
+                t("preset_card.apply_selected_short"),
+                variant="primary",
+                classes="preset-btn apply-selected",
+            )
+            yield Button(
+                t("preset_card.apply_all_short"),
+                variant="warning",
+                classes="preset-btn apply-all",
+            )
 
     @on(Button.Pressed)
     def _on_button_pressed(self, event: Button.Pressed) -> None:

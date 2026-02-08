@@ -1,0 +1,8 @@
+name: standard
+label: 标准模式
+description: 平衡响应与续航，适合大多数商品
+use_case: 鞋类、箱包、中型电子产品
+battery_life: 约 6 个月 (200次/天)
+threshold_hex: 0x0A
+tail_window_ms: 3000
+tx_power_dbm: 4

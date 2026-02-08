@@ -1,0 +1,8 @@
+name: low
+label: 低功耗模式
+description: 延长续航，需用力拿起才会触发
+use_case: 展示陈列、震动环境、重型商品
+battery_life: 约 12 个月 (200次/天)
+threshold_hex: 0x14
+tail_window_ms: 4000
+tx_power_dbm: 0

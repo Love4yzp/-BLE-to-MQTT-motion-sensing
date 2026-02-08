@@ -1,0 +1,14 @@
+[project]
+name = "sensor-config"
+version = "0.1.0"
+description = "TUI client for nRF52840 AT command configuration"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pyserial>=3.5",
+  "pyyaml>=6.0",
+  "textual>=0.74.0",
+]
+
+[dependency-groups]
+dev = []

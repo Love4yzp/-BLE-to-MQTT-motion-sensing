@@ -1,0 +1,8 @@
+name: high
+label: 高灵敏模式
+description: 极速响应，轻触即触发
+use_case: 快速互动商品、小件轻便商品
+battery_life: 约 3 个月 (200次/天)
+threshold_hex: 0x05
+tail_window_ms: 2000
+tx_power_dbm: 4

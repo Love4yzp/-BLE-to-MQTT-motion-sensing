@@ -5,7 +5,7 @@ FastAPI + MQTT 后端服务，提供产品映射管理、网关管理和实时�
 ## 快速启动
 
 ```bash
-cd backend
+cd app/backend
 
 # 安装依赖（使用 uv）
 uv sync
@@ -69,7 +69,7 @@ SERVER_PORT=8080           # 服务端口
 ## 数据文件
 
 ```
-backend/
+app/backend/
 ├── data/
 │   ├── product_map.csv   # 产品映射表
 │   └── gateways.json     # 网关信息

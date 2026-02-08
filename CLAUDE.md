@@ -8,7 +8,7 @@ SeeedUA Smart Retail — an IoT system that detects when products are picked up 
 
 1. **nRF52840 Sensor Firmware** (`XIAO_nRF52840_LowPowerMotionDetect/`) — Arduino C++, runs on Seeed XIAO nRF52840 Sense with LSM6DS3 IMU. Sleeps at <5µA, wakes on motion, broadcasts BTHome v2 BLE packets, returns to sleep.
 2. **ESP32 Gateway Firmware** (`XIAO_ESP32_Series_BluetoothProxy/`) — Arduino C++, runs on XIAO ESP32-C3/S3/C6/C5. Scans BLE, converts BTHome broadcasts to JSON, publishes over MQTT.
-3. **FastAPI Backend** (`backend/`) — Python. Manages product-to-video mappings, consumes MQTT sensor events, deduplicates, publishes screen playback commands. Serves admin web UI.
+3. **FastAPI Backend** (`app/backend/`) — Python. Manages product-to-video mappings, consumes MQTT sensor events, deduplicates, publishes screen playback commands. Serves admin web UI.
 
 ## Build & Development
 
@@ -34,7 +34,7 @@ Developed in Arduino IDE. No Makefile or PlatformIO — open the `.ino` file dir
 ### Python Backend
 
 ```bash
-cd backend
+cd app/backend
 uv sync                           # install dependencies
 uv run python main.py             # http://localhost:8080
 # or
@@ -104,7 +104,7 @@ Key design: `AppContext` struct bundles all mutable state (no globals), ISR even
 - **Deduplication**: Same MAC within `dedup_window` (default 2s) is ignored.
 - **Sensor timeout**: Background thread checks every 1s. If no motion for `sensor_timeout` (default 5s), emits "put_down" event.
 - **Event log**: In-memory ring buffer, last 100 events.
-- **i18n**: Chinese (zh) and English (en), translation files in `backend/locales/`.
+- **i18n**: Chinese (zh) and English (en), translation files in `app/backend/locales/`.
 - **Threading**: Daemon threads for MQTT client loop and timeout checker, initialized in FastAPI lifespan context manager.
 - **Threading**: Daemon threads for MQTT client loop and timeout checker, initialized in FastAPI lifespan context manager.
 

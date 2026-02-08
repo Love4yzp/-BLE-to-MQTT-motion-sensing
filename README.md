@@ -18,7 +18,7 @@ nRF52840 传感器 (BLE BTHome v2 广播)
 |------|------|------|------|
 | 运动传感器 | `XIAO_nRF52840_LowPowerMotionDetect/` | XIAO nRF52840 Sense | LSM6DS3 IMU 运动检测，BTHome v2 BLE 广播，深度睡眠 < 5µA |
 | BLE-MQTT 网关 | `XIAO_ESP32_Series_BluetoothProxy/` | XIAO ESP32-C3/S3/C6/C5 | BLE 扫描 → WiFi → MQTT 转发 |
-| 后端服务 | `backend/` | 任意服务器 | FastAPI + MQTT，产品映射、去重、播放指令 |
+| 后端服务 | `app/backend/` | 任意服务器 | FastAPI + MQTT，产品映射、去重、播放指令 |
 
 ## 快速开始
 
@@ -32,7 +32,7 @@ mosquitto -c /usr/local/etc/mosquitto/mosquitto.conf
 ### 2. 启动后端
 
 ```bash
-cd backend
+cd app/backend
 uv sync                    # 安装依赖
 cp .env.example .env       # 编辑 .env 设置 MQTT_BROKER 地址
 uv run python main.py      # http://localhost:8080
@@ -53,7 +53,7 @@ USB 连接时支持 AT 命令配置（`AT+HELP` 查看命令列表）。
 
 ### 5. 配置产品映射
 
-在后端 Web 界面或直接编辑 `backend/data/product_map.csv`：
+在后端 Web 界面或直接编辑 `app/backend/data/product_map.csv`：
 
 ```csv
 mac,sku,name,video,screen

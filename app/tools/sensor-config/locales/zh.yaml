@@ -1,0 +1,105 @@
+# 中文 (简体)
+app:
+  title: "SeeedUA 传感器配置工具"
+
+tabs:
+  devices: "设备 (Devices)"
+  presets: "预设 (Presets)"
+  config: "高级配置 (Advanced)"
+  log: "日志 (Log)"
+
+bindings:
+  quit: "退出"
+  refresh_ports: "刷新端口"
+  devices: "设备"
+  presets: "预设"
+  config: "高级配置"
+  log: "日志"
+  switch_lang: "切换语言"
+
+devices:
+  select_prompt: "选择串口..."
+  connect: "连接"
+  refresh: "刷新端口"
+  disconnect: "断开"
+  hint_empty: "请选择端口并连接设备"
+  hint_no_device: "未连接任何设备。请选择端口并连接。"
+  mac_label: "MAC"
+  name_label: "名称"
+  status_bar: "检测到 {total} 个端口，已连接: {connected}"
+  status_ready: "就绪"
+  target_label: "当前选中设备: {port}"
+  target_none: "当前选中设备: -"
+
+devices_notify:
+  select_port_first: "请先选择一个串口"
+  already_connected: "该端口已连接"
+  connected: "已连接 {port}"
+  connect_failed: "连接失败 {port}: {error}"
+  disconnected: "已断开连接"
+  no_ports: "未检测到可用串口"
+  ports_refreshed: "端口已刷新"
+
+presets:
+  standard:
+    label: "标准模式"
+    desc: "平衡灵敏度与电池续航"
+    scenario: "通用零售场景"
+    battery: "~6 个月"
+  high:
+    label: "高灵敏模式"
+    desc: "极速响应，适合快速互动"
+    scenario: "频繁拿取展品"
+    battery: "~3 个月"
+  low:
+    label: "低功耗模式"
+    desc: "最大化电池寿命"
+    scenario: "静态展示陈列"
+    battery: "~12 个月"
+
+preset_card:
+  threshold: "灵敏度"
+  tail_window: "检测持续"
+  tx_power: "信号强度"
+  battery: "续航"
+  scenario: "场景"
+  apply_selected: "应用到选中"
+  apply_all: "应用到所有"
+
+preset_notify:
+  no_device_selected: "未选中任何已连接设备"
+  no_devices: "没有可应用的设备"
+  applying: "正在应用预设 {name} 到 {count} 台设备..."
+
+config:
+  threshold_label: "运动灵敏度 (Threshold 0x02-0x3F)"
+  threshold_explanation: >-
+    灵敏度决定多大的动作才会触发检测。
+    数值越小越灵敏（轻触即响应），但可能误触发；
+    数值越大越迟钝（需要较大动作），适合防止误报。
+  tail_label: "拿起后持续检测时间 (Tail Window 1000-10000ms)"
+  tail_explanation: >-
+    检测到拿起后，传感器会持续广播的等待时间。
+    时间越长，能合并连续动作（如反复拿放）避免重复触发，但更耗电；
+    时间越短越省电，但快速连续拿放可能触发多次。
+  tx_label: "信号发射功率 (TX Power -40 to 4 dBm)"
+  tx_explanation: >-
+    BLE 广播信号的发射强度。
+    功率越高，网关接收范围越远（推荐货架间距大时调高）；
+    功率越低越省电，适合网关距离近的场景。
+  apply_config: "应用配置"
+  save_flash: "保存到闪存"
+  restore_defaults: "恢复默认"
+  reboot: "重启设备"
+
+config_notify:
+  no_device: "未选中任何已连接设备"
+  applied: "配置已应用"
+  saved: "已保存到闪存"
+  restored: "已恢复默认设置"
+  rebooting: "正在重启..."
+  invalid_values: "输入值无效: {error}"
+
+log:
+  connected: "已连接 {port}"
+  command_error: "命令错误: {error}"

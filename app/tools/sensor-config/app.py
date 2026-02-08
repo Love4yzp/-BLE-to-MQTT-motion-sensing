@@ -28,6 +28,7 @@ from textual.widgets import (
     Label,
 )
 
+from i18n import get_locale, set_locale, t
 from serial_client import SerialClient
 
 
@@ -54,34 +55,6 @@ class DeviceState:
     tx_power: Optional[int] = None
 
 
-PRESET_META = {
-    "standard": {
-        "label": "标准模式",
-        "desc": "平衡响应与续航",
-        "scenario": "通用场景",
-        "battery": "~6个月",
-    },
-    "high": {
-        "label": "高灵敏模式",
-        "desc": "极速响应",
-        "scenario": "快速互动",
-        "battery": "~3个月",
-    },
-    "low": {
-        "label": "低功耗模式",
-        "desc": "延长续航",
-        "scenario": "展示陈列",
-        "battery": "~12个月",
-    },
-}
-
-EXPLANATIONS = {
-    "threshold": "运动阈值 — 越小越灵敏，误触发风险增加；越大越迟钝，可能漏检",
-    "tail": "尾随窗口 — 广播结束后等待时间，越长越耗电但能合并连续动作",
-    "tx": "发射功率 — 越高覆盖越远但略耗电",
-}
-
-
 class PresetCard(Static):
     def __init__(self, preset: Preset, apply_callback):
         super().__init__()
@@ -100,23 +73,27 @@ class PresetCard(Static):
                 )
 
             with Grid(classes="preset-stats"):
-                yield Label(f"阈值: 0x{self.preset.threshold:02X}")
-                yield Label(f"窗口: {self.preset.tail_window}ms")
-                yield Label(f"功率: {self.preset.tx_power}dBm")
+                yield Label(
+                    f"{t('preset_card.threshold')}: 0x{self.preset.threshold:02X}"
+                )
+                yield Label(
+                    f"{t('preset_card.tail_window')}: {self.preset.tail_window}ms"
+                )
+                yield Label(f"{t('preset_card.tx_power')}: {self.preset.tx_power}dBm")
                 if self.preset.battery:
-                    yield Label(f"续航: {self.preset.battery}")
+                    yield Label(f"{t('preset_card.battery')}: {self.preset.battery}")
                 if self.preset.scenario:
-                    yield Label(f"场景: {self.preset.scenario}")
+                    yield Label(f"{t('preset_card.scenario')}: {self.preset.scenario}")
 
             with Horizontal(classes="preset-actions"):
                 yield Button(
-                    "应用到选中",
+                    t("preset_card.apply_selected"),
                     id=f"apply-sel-{self.preset.name}",
                     variant="primary",
                     classes="preset-btn",
                 )
                 yield Button(
-                    "应用到所有",
+                    t("preset_card.apply_all"),
                     id=f"apply-all-{self.preset.name}",
                     variant="warning",
                     classes="preset-btn",
@@ -145,13 +122,15 @@ class DeviceCard(Static):
             yield Label(f"{status}  {rich_escape(self.port)}", classes="card-port")
             safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", self.port)
             yield Button(
-                "断开",
+                t("devices.disconnect"),
                 id=f"dc-{safe_id}",
                 variant="error",
                 classes="disconnect-btn",
             )
         with Horizontal(classes="card-info"):
-            yield Label(f"MAC: {self.state.mac}  |  名称: {self.state.name}")
+            yield Label(
+                f"{t('devices.mac_label')}: {self.state.mac}  |  {t('devices.name_label')}: {self.state.name}"
+            )
 
     def on_click(self, event) -> None:
         self._on_select(self.port)
@@ -304,12 +283,13 @@ class SensorConfigApp(App):
     """
 
     BINDINGS = [
-        Binding("q", "quit", "退出"),
-        Binding("r", "refresh_ports", "刷新端口"),
-        Binding("1", "show_tab('tab-devices')", "设备"),
-        Binding("2", "show_tab('tab-presets')", "预设"),
-        Binding("3", "show_tab('tab-config')", "高级配置"),
-        Binding("4", "show_tab('tab-log')", "日志"),
+        Binding("q", "quit", t("bindings.quit")),
+        Binding("r", "refresh_ports", t("bindings.refresh_ports")),
+        Binding("1", "show_tab('tab-devices')", t("bindings.devices")),
+        Binding("2", "show_tab('tab-presets')", t("bindings.presets")),
+        Binding("3", "show_tab('tab-config')", t("bindings.config")),
+        Binding("4", "show_tab('tab-log')", t("bindings.log")),
+        Binding("l", "switch_lang", t("bindings.switch_lang")),
     ]
 
     def __init__(self) -> None:
@@ -325,26 +305,30 @@ class SensorConfigApp(App):
         yield Header()
 
         with TabbedContent(initial="tab-devices"):
-            with TabPane("设备 (Devices)", id="tab-devices"):
+            with TabPane(t("tabs.devices"), id="tab-devices"):
                 with Horizontal(classes="button-row"):
-                    yield Select([], id="port-select", prompt="选择串口...")
-                    yield Button("连接", id="btn-connect", variant="success")
-                    yield Button("刷新端口", id="btn-refresh")
+                    yield Select(
+                        [], id="port-select", prompt=t("devices.select_prompt")
+                    )
+                    yield Button(
+                        t("devices.connect"), id="btn-connect", variant="success"
+                    )
+                    yield Button(t("devices.refresh"), id="btn-refresh")
                 with VerticalScroll(id="device-stack"):
                     yield Label(
-                        "[dim]请选择端口并连接设备[/dim]",
+                        f"[dim]{t('devices.hint_empty')}[/dim]",
                         id="no-device-hint",
                     )
 
-            with TabPane("预设 (Presets)", id="tab-presets"):
+            with TabPane(t("tabs.presets"), id="tab-presets"):
                 with VerticalScroll(id="preset-container"):
                     pass
 
-            with TabPane("高级配置 (Advanced)", id="tab-config"):
+            with TabPane(t("tabs.config"), id="tab-config"):
                 with VerticalScroll(classes="config-section"):
-                    yield Label("当前选中设备: -", id="config-target-label")
+                    yield Label(t("devices.target_none"), id="config-target-label")
 
-                    yield Label("运动阈值 (Threshold 0x02-0x3F)", classes="field-label")
+                    yield Label(t("config.threshold_label"), classes="field-label")
                     yield Input(
                         placeholder="0x0A",
                         id="input-threshold",
@@ -352,11 +336,11 @@ class SensorConfigApp(App):
                             Regex(r"^0x[0-9A-Fa-f]{2}$", "Must be hex 0x02-0x3F")
                         ],
                     )
-                    yield Label(EXPLANATIONS["threshold"], classes="field-explanation")
-
                     yield Label(
-                        "尾随窗口 (Tail Window 1000-10000ms)", classes="field-label"
+                        t("config.threshold_explanation"), classes="field-explanation"
                     )
+
+                    yield Label(t("config.tail_label"), classes="field-label")
                     yield Input(
                         placeholder="3000",
                         id="input-tail",
@@ -367,11 +351,11 @@ class SensorConfigApp(App):
                             )
                         ],
                     )
-                    yield Label(EXPLANATIONS["tail"], classes="field-explanation")
-
                     yield Label(
-                        "发射功率 (TX Power -40 to 4 dBm)", classes="field-label"
+                        t("config.tail_explanation"), classes="field-explanation"
                     )
+
+                    yield Label(t("config.tx_label"), classes="field-label")
                     yield Input(
                         placeholder="4",
                         id="input-tx",
@@ -383,22 +367,28 @@ class SensorConfigApp(App):
                             )
                         ],
                     )
-                    yield Label(EXPLANATIONS["tx"], classes="field-explanation")
+                    yield Label(t("config.tx_explanation"), classes="field-explanation")
 
                     with Horizontal(classes="button-row"):
                         yield Button(
-                            "应用配置", id="btn-apply-config", variant="primary"
+                            t("config.apply_config"),
+                            id="btn-apply-config",
+                            variant="primary",
                         )
                         yield Button(
-                            "保存到闪存", id="btn-save-flash", variant="warning"
+                            t("config.save_flash"),
+                            id="btn-save-flash",
+                            variant="warning",
                         )
-                        yield Button("恢复默认", id="btn-defaults")
-                        yield Button("重启设备", id="btn-reboot", variant="error")
+                        yield Button(t("config.restore_defaults"), id="btn-defaults")
+                        yield Button(
+                            t("config.reboot"), id="btn-reboot", variant="error"
+                        )
 
-            with TabPane("日志 (Log)", id="tab-log"):
+            with TabPane(t("tabs.log"), id="tab-log"):
                 yield RichLog(id="log", wrap=True, highlight=False, markup=True)
 
-        yield Label("Ready", id="status-bar")
+        yield Label(t("devices.status_ready"), id="status-bar")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -413,7 +403,10 @@ class SensorConfigApp(App):
                     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
                     name = data.get("name") or path.stem
 
-                    meta = PRESET_META.get(name, {})
+                    meta_label = t(f"presets.{name}.label")
+                    meta_desc = t(f"presets.{name}.desc")
+                    meta_scenario = t(f"presets.{name}.scenario")
+                    meta_battery = t(f"presets.{name}.battery")
 
                     presets[name] = Preset(
                         name=name,
@@ -422,10 +415,22 @@ class SensorConfigApp(App):
                         ),
                         tail_window=int(data.get("tail_window_ms", 3000)),
                         tx_power=int(data.get("tx_power_dbm", 4)),
-                        label=meta.get("label", name),
-                        description=meta.get("desc", ""),
-                        scenario=meta.get("scenario", ""),
-                        battery=meta.get("battery", ""),
+                        label=meta_label
+                        if meta_label != f"presets.{name}.label"
+                        else name,
+                        description=(
+                            "" if meta_desc == f"presets.{name}.desc" else meta_desc
+                        ),
+                        scenario=(
+                            ""
+                            if meta_scenario == f"presets.{name}.scenario"
+                            else meta_scenario
+                        ),
+                        battery=(
+                            ""
+                            if meta_battery == f"presets.{name}.battery"
+                            else meta_battery
+                        ),
                     )
                 except Exception as e:
                     self.notify(
@@ -446,7 +451,7 @@ class SensorConfigApp(App):
         if not self.clients:
             stack.mount(
                 Label(
-                    "[dim]未连接任何设备。请选择端口并连接。[/dim]",
+                    f"[dim]{t('devices.hint_no_device')}[/dim]",
                     id="no-device-hint",
                 )
             )
@@ -463,7 +468,7 @@ class SensorConfigApp(App):
         """Select a device as the target for config/preset operations."""
         self.selected_port = port
         self.query_one("#config-target-label", Label).update(
-            f"当前选中设备: {rich_escape(port)}"
+            t("devices.target_label", port=rich_escape(port))
         )
         self.rebuild_device_stack()
         if port in self.clients:
@@ -477,7 +482,7 @@ class SensorConfigApp(App):
             if port not in current:
                 self.disconnect_device(port)
         self.query_one("#status-bar", Label).update(
-            f"检测到 {len(ports)} 个端口，已连接: {len(self.clients)}"
+            t("devices.status_bar", total=len(ports), connected=len(self.clients))
         )
         self.rebuild_device_stack()
 
@@ -492,18 +497,18 @@ class SensorConfigApp(App):
         ]
         select.set_options(options)
         self.query_one("#status-bar", Label).update(
-            f"检测到 {len(ports)} 个端口，已连接: {len(self.clients)}"
+            t("devices.status_bar", total=len(ports), connected=len(self.clients))
         )
 
     @on(Button.Pressed, "#btn-connect")
     def on_btn_connect(self) -> None:
         select = self.query_one("#port-select", Select)
         if select.value == Select.BLANK:
-            self.notify("请先选择一个串口", severity="warning")
+            self.notify(t("devices_notify.select_port_first"), severity="warning")
             return
         port = str(select.value)
         if port in self.clients:
-            self.notify("该端口已连接", severity="warning")
+            self.notify(t("devices_notify.already_connected"), severity="warning")
             return
         self.run_worker(lambda p=port: self.connect_device(p), thread=True)
 
@@ -520,14 +525,17 @@ class SensorConfigApp(App):
             client.connect()
             self.clients[port] = client
             self.device_states[port].connected = True
-            self.log_message(port, f"[green]Connected to {rich_escape(port)}[/green]")
-            self.notify(f"Connected to {rich_escape(port)}")
+            self.log_message(
+                port,
+                f"[green]{t('log.connected', port=rich_escape(port))}[/green]",
+            )
+            self.notify(t("devices_notify.connected", port=rich_escape(port)))
 
             if self.selected_port is None:
                 self.selected_port = port
                 self.call_from_thread(
                     self.query_one("#config-target-label", Label).update,
-                    f"当前选中设备: {rich_escape(port)}",
+                    t("devices.target_label", port=rich_escape(port)),
                 )
 
             self.send_command(port, "AT+INFO")
@@ -545,7 +553,14 @@ class SensorConfigApp(App):
             self.call_from_thread(self.refresh_port_select)
         except Exception as e:
             self.log_message(port, f"[red]Connection failed: {e}[/red]")
-            self.notify(f"Failed to connect {rich_escape(port)}: {e}", severity="error")
+            self.notify(
+                t(
+                    "devices_notify.connect_failed",
+                    port=rich_escape(port),
+                    error=str(e),
+                ),
+                severity="error",
+            )
 
     def disconnect_device(self, port: str) -> None:
         if port in self.clients:
@@ -564,10 +579,12 @@ class SensorConfigApp(App):
             self.selected_port = next(iter(self.clients), None)
             if self.selected_port:
                 self.query_one("#config-target-label", Label).update(
-                    f"当前选中设备: {rich_escape(self.selected_port)}"
+                    t("devices.target_label", port=rich_escape(self.selected_port))
                 )
             else:
-                self.query_one("#config-target-label", Label).update("当前选中设备: -")
+                self.query_one("#config-target-label", Label).update(
+                    t("devices.target_none")
+                )
 
         self.log_message(port, "[yellow]Disconnected[/yellow]")
         self.rebuild_device_stack()
@@ -579,7 +596,10 @@ class SensorConfigApp(App):
             try:
                 self.clients[port].send_command(command)
             except Exception as e:
-                self.log_message(port, f"[red]Command error: {e}[/red]")
+                self.log_message(
+                    port,
+                    f"[red]{t('log.command_error', error=str(e))}[/red]",
+                )
 
     def on_serial_line(self, port: str, line: str) -> None:
         self.call_from_thread(self.handle_serial_line, port, line)
@@ -633,14 +653,14 @@ class SensorConfigApp(App):
             if self.selected_port and self.selected_port in self.clients:
                 targets = [self.selected_port]
             else:
-                self.notify("No connected device selected", severity="warning")
+                self.notify(t("preset_notify.no_device_selected"), severity="warning")
                 return
 
         if not targets:
-            self.notify("No devices to apply preset to", severity="warning")
+            self.notify(t("preset_notify.no_devices"), severity="warning")
             return
 
-        self.notify(f"Applying preset {preset.name} to {len(targets)} devices...")
+        self.notify(t("preset_notify.applying", name=preset.name, count=len(targets)))
 
         commands = [
             f"AT+THRESHOLD={preset.threshold:02X}",
@@ -662,7 +682,26 @@ class SensorConfigApp(App):
 
     def action_refresh_ports(self) -> None:
         self.refresh_available_ports()
-        self.notify("Ports refreshed")
+        self.notify(t("devices_notify.ports_refreshed"))
+
+    def action_switch_lang(self) -> None:
+        new_lang = "en" if get_locale() == "zh" else "zh"
+        set_locale(new_lang)
+        self.notify(f"{t('bindings.switch_lang')}: {new_lang}")
+        self.rebuild_ui()
+
+    def rebuild_ui(self) -> None:
+        self.load_presets()
+        self.rebuild_device_stack()
+        self.refresh_port_select()
+        if self.selected_port:
+            self.query_one("#config-target-label", Label).update(
+                t("devices.target_label", port=rich_escape(self.selected_port))
+            )
+        else:
+            self.query_one("#config-target-label", Label).update(
+                t("devices.target_none")
+            )
 
     @on(Button.Pressed, "#btn-refresh")
     def on_btn_refresh(self) -> None:
@@ -672,7 +711,7 @@ class SensorConfigApp(App):
     @on(Button.Pressed, "#btn-apply-config")
     def on_btn_apply_config(self) -> None:
         if not self.selected_port or self.selected_port not in self.clients:
-            self.notify("No connected device selected", severity="error")
+            self.notify(t("config_notify.no_device"), severity="error")
             return
 
         try:
@@ -691,27 +730,29 @@ class SensorConfigApp(App):
             self.run_worker(
                 self.send_commands_worker(self.selected_port, commands), thread=True
             )
-            self.notify("Config applied")
+            self.notify(t("config_notify.applied"))
         except Exception as e:
-            self.notify(f"Invalid values: {e}", severity="error")
+            self.notify(
+                t("config_notify.invalid_values", error=str(e)), severity="error"
+            )
 
     @on(Button.Pressed, "#btn-save-flash")
     def on_btn_save_flash(self) -> None:
         if self.selected_port and self.selected_port in self.clients:
             self.send_command(self.selected_port, "AT+SAVE")
-            self.notify("Saved to flash")
+            self.notify(t("config_notify.saved"))
 
     @on(Button.Pressed, "#btn-defaults")
     def on_btn_defaults(self) -> None:
         if self.selected_port and self.selected_port in self.clients:
             self.send_command(self.selected_port, "AT+DEFAULT")
-            self.notify("Restored defaults")
+            self.notify(t("config_notify.restored"))
 
     @on(Button.Pressed, "#btn-reboot")
     def on_btn_reboot(self) -> None:
         if self.selected_port and self.selected_port in self.clients:
             self.send_command(self.selected_port, "AT+REBOOT")
-            self.notify("Rebooting...")
+            self.notify(t("config_notify.rebooting"))
 
     def _parse_threshold_value(self, raw: object) -> int:
         if raw is None:

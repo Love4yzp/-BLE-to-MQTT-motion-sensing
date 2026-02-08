@@ -1,0 +1,105 @@
+# English
+app:
+  title: "SeeedUA Sensor Config Tool"
+
+tabs:
+  devices: "Devices"
+  presets: "Presets"
+  config: "Advanced Config"
+  log: "Log"
+
+bindings:
+  quit: "Quit"
+  refresh_ports: "Refresh Ports"
+  devices: "Devices"
+  presets: "Presets"
+  config: "Config"
+  log: "Log"
+  switch_lang: "Switch Language"
+
+devices:
+  select_prompt: "Select port..."
+  connect: "Connect"
+  refresh: "Refresh Ports"
+  disconnect: "Disconnect"
+  hint_empty: "Select a port and connect"
+  hint_no_device: "No devices connected. Select a port and connect."
+  mac_label: "MAC"
+  name_label: "Name"
+  status_bar: "Detected {total} ports, connected: {connected}"
+  status_ready: "Ready"
+  target_label: "Selected device: {port}"
+  target_none: "Selected device: -"
+
+devices_notify:
+  select_port_first: "Please select a port first"
+  already_connected: "Port already connected"
+  connected: "Connected to {port}"
+  connect_failed: "Failed to connect {port}: {error}"
+  disconnected: "Disconnected"
+  no_ports: "No serial ports detected"
+  ports_refreshed: "Ports refreshed"
+
+presets:
+  standard:
+    label: "Standard"
+    desc: "Balanced sensitivity and battery life"
+    scenario: "General retail"
+    battery: "~6 months"
+  high:
+    label: "High Sensitivity"
+    desc: "Fast response for quick interactions"
+    scenario: "Frequent product handling"
+    battery: "~3 months"
+  low:
+    label: "Low Power"
+    desc: "Maximize battery life"
+    scenario: "Static display"
+    battery: "~12 months"
+
+preset_card:
+  threshold: "Sensitivity"
+  tail_window: "Detection hold"
+  tx_power: "Signal power"
+  battery: "Battery"
+  scenario: "Scenario"
+  apply_selected: "Apply to selected"
+  apply_all: "Apply to all"
+
+preset_notify:
+  no_device_selected: "No connected device selected"
+  no_devices: "No devices to apply preset to"
+  applying: "Applying preset {name} to {count} device(s)..."
+
+config:
+  threshold_label: "Motion Sensitivity (Threshold 0x02-0x3F)"
+  threshold_explanation: >-
+    Sensitivity determines how much motion triggers detection.
+    Lower values = more sensitive (responds to light touch) but may false-trigger;
+    higher values = less sensitive (requires bigger motion), good for avoiding false positives.
+  tail_label: "Detection Hold Time (Tail Window 1000-10000ms)"
+  tail_explanation: >-
+    How long the sensor keeps broadcasting after detecting a pickup.
+    Longer = merges repeated actions (e.g. pick up and put down quickly) but uses more power;
+    shorter = saves battery but rapid handling may trigger multiple events.
+  tx_label: "Signal Power (TX Power -40 to 4 dBm)"
+  tx_explanation: >-
+    BLE broadcast signal strength.
+    Higher power = longer range to gateway (recommended for wide shelf spacing);
+    lower power = saves battery, suitable when gateway is nearby.
+  apply_config: "Apply Config"
+  save_flash: "Save to Flash"
+  restore_defaults: "Restore Defaults"
+  reboot: "Reboot Device"
+
+config_notify:
+  no_device: "No connected device selected"
+  applied: "Config applied"
+  saved: "Saved to flash"
+  restored: "Defaults restored"
+  rebooting: "Rebooting..."
+  invalid_values: "Invalid values: {error}"
+
+log:
+  connected: "Connected to {port}"
+  command_error: "Command error: {error}"
